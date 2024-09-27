@@ -1,0 +1,38 @@
+# Build Folders
+build/
+x64/
+Debug/
+Release/
+
+# Visual Studio specific files
+.vscode/
+.vs/
+*.vcxproj.user
+*.vcxproj.filters
+*.suo
+*.user
+*.cache
+*.pdb
+*.opendb
+ipch/
+*.log
+
+# Visual Studio Code specific files
+.vscode/
+
+# Windows specific files
+Thumbs.db
+Desktop.ini
+
+# OpenCV Binary Files
+*.exe
+*.dll
+*.lib
+*.obj
+
+# Ignore OpenCV generated files
+opencv/build/
+
+# Ignore dependency manager files
+*.dylib
+*.so
