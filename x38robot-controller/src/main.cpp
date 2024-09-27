@@ -1,6 +1,5 @@
-#include <opencv2/opencv.hpp>
-#include <iostream>
+#include "main.h"
 
 int main() {
-    return 0;
+	return 0;
 }
