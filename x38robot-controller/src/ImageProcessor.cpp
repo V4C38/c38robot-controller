@@ -1,5 +1,5 @@
 #include "ImageProcessor.h"
-#include <pybind11/embed.h>  // Ensure this is included for embedding Python
+#include <pybind11/embed.h>
 #include <iostream>
 
 namespace py = pybind11;
@@ -7,14 +7,29 @@ namespace py = pybind11;
 const std::string PYTHON_SCRIPT_PATH = "/Users/johannestscharn/Repositories/c38robot-controller/x38robot-controller/Scripts/hand_tracking.py";
 
 ImageProcessor::ImageProcessor() {
-    static py::scoped_interpreter guard{};  // Ensure Python interpreter is initialized once
+    static py::scoped_interpreter guard{};
 }
 
 ImageProcessor::~ImageProcessor() {
-    // Python interpreter will automatically finalize
+    // Python interpreter finalizes automatically
 }
 
-void ImageProcessor::initialize_hand_tracking() {
+bool ImageProcessor::getIsActive() const{
+    return isActive;
+}
+
+void ImageProcessor::initialize(IKSolver* InIKSolver){
+    ikSolver = InIKSolver;
+}
+
+void ImageProcessor::runHandTracking() {
+    if (ikSolver == nullptr) {
+        std::cerr << "Error: IK Solver not initialized!" << std::endl;
+        return;
+    }
+    // ----------------------------------------------------------------------------------------------
+    // Python setup using pybind11
+    // ----------------------------------------------------------------------------------------------
     try {
         // Add the 'Scripts' directory to Python's sys.path
         py::exec("import sys\nsys.path.append('" + PYTHON_SCRIPT_PATH.substr(0, PYTHON_SCRIPT_PATH.rfind('/')) + "')");
@@ -26,21 +41,60 @@ void ImageProcessor::initialize_hand_tracking() {
         std::cerr << "Error initializing hand tracking: " << e.what() << std::endl;
         throw;
     }
+    // ----------------------------------------------------------------------------------------------
+
+    // Open the webcam
+    cv::VideoCapture cap(0);
+    if (!cap.isOpened()) {
+        std::cerr << "Error: Could not open webcam." << std::endl;
+        return;
+    }
+
+    cv::namedWindow("Hand Tracking", cv::WINDOW_AUTOSIZE); // Ensure window creation
+    cv::Mat frame;
+    isActive = true;
+    while (true) {
+        cap >> frame;
+        if (frame.empty()) {
+            std::cerr << "Error: Could not capture frame." << std::endl;
+            break;
+        }
+
+        // Process the frame and get both the image and the index tip coordinates
+        auto [processed_frame, index_tip_coordinates] = this->process_video_frame(frame);
+
+        ikSolver->solve(index_tip_coordinates);
+        cv::imshow("Hand Tracking", processed_frame);
+        
+        if (cv::waitKey(1) == 'q') {
+            break;
+        }
+    }
+    cap.release();
+    cv::destroyAllWindows();
 }
 
 
-cv::Mat ImageProcessor::process_video_frame(const cv::Mat& frame) {
+std::pair<cv::Mat, std::tuple<float, float, float>> ImageProcessor::process_video_frame(const cv::Mat& frame) {
     try {
         py::array np_frame = mat_to_numpy(frame);
-        py::object result_frame = process_frame_py(np_frame);
-        return numpy_to_mat(result_frame.cast<py::array>());
+
+        // Process frame with Python
+        py::object result = process_frame_py(np_frame);
+
+        // Extract processed image and index tip coordinates from the Python result
+        auto result_tuple = result.cast<std::tuple<py::array, std::tuple<float, float, float>>>();
+
+        py::array processed_np_frame = std::get<0>(result_tuple);
+        std::tuple<float, float, float> index_tip_coordinates = std::get<1>(result_tuple);
+        cv::Mat processed_frame = numpy_to_mat(processed_np_frame);
+        return {processed_frame, index_tip_coordinates};
     } 
     catch (const std::exception &e) {
         std::cerr << "Error processing video frame: " << e.what() << std::endl;
-        return frame;  // Return the original frame if processing fails
+        return {frame, {0.0f, 0.0f, 0.0f}};  // Return the original frame if processing fails
     }
 }
-
 
 // ------------------------------------------------------------------------------------------
 // Utility

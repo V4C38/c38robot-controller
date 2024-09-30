@@ -1,6 +1,7 @@
 #ifndef IMAGEPROCESSOR_H
 #define IMAGEPROCESSOR_H
 
+#include "IKSolver.h"
 #include <opencv2/opencv.hpp>
 #include <pybind11/pybind11.h>
 #include <pybind11/numpy.h>
@@ -12,16 +13,21 @@ public:
     ImageProcessor();
     ~ImageProcessor();
 
-    // Initializes Python environment and loads the hand tracking script
-    void initialize_hand_tracking();
+    void initialize(IKSolver* InIKSolver);
+    void runHandTracking();
+
+    bool getIsActive() const;
 
     // Processes the video frame and returns the processed frame
-    cv::Mat process_video_frame(const cv::Mat& frame);
+    std::pair<cv::Mat, std::tuple<float, float, float>> process_video_frame(const cv::Mat& frame);
 
 private:
+    bool isActive = false;
     py::object process_frame_py;
     py::array mat_to_numpy(const cv::Mat& mat);
     cv::Mat numpy_to_mat(const py::array_t<uint8_t>& input);
+
+    IKSolver* ikSolver = nullptr;
 };
 
 #endif // IMAGEPROCESSOR_H

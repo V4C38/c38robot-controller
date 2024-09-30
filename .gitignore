@@ -1,38 +1,26 @@
-# Build Folders
-build/
-x64/
-Debug/
-Release/
+# Ignore DS_Store files (macOS)
+.DS_Store
 
-# Visual Studio specific files
-.vscode/
-.vs/
-*.vcxproj.user
-*.vcxproj.filters
-*.suo
-*.user
-*.cache
-*.pdb
-*.opendb
-ipch/
-*.log
+# Ignore Python cache and compiled files
+__pycache__/
+*.py[cod]
 
-# Visual Studio Code specific files
-.vscode/
-
-# Windows specific files
-Thumbs.db
-Desktop.ini
-
-# OpenCV Binary Files
-*.exe
-*.dll
-*.lib
+# Ignore C++ build artifacts
+*.o
 *.obj
-
-# Ignore OpenCV generated files
-opencv/build/
-
-# Ignore dependency manager files
-*.dylib
+*.exe
+*.out
+*.log
+*.a
 *.so
+*.dylib
+
+# Ignore IDE and editor settings
+.vscode/
+.idea/
+
+# Ignore temporary/backup files
+*.swp
+*.swo
+*.tmp
+*~
