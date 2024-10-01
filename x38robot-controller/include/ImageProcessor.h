@@ -23,11 +23,17 @@ public:
 
 private:
     bool isActive = false;
+    const int updateRate = 5;  // Send delta every n frames
+    int framesSinceUpdate = 0;
+    std::tuple<float, float, float> accumulatedDelta;
+
+    // Python conversion helpers
     py::object process_frame_py;
     py::array mat_to_numpy(const cv::Mat& mat);
     cv::Mat numpy_to_mat(const py::array_t<uint8_t>& input);
 
     IKSolver* ikSolver = nullptr;
+    std::tuple<float, float, float> prevCoordinates;
 };
 
 #endif // IMAGEPROCESSOR_H

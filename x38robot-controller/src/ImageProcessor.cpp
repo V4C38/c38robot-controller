@@ -53,6 +53,10 @@ void ImageProcessor::runHandTracking() {
     cv::namedWindow("Hand Tracking", cv::WINDOW_AUTOSIZE); // Ensure window creation
     cv::Mat frame;
     isActive = true;
+    framesSinceUpdate = 0;
+    prevCoordinates = std::make_tuple(0.0f, 0.0f, 0.0f);
+    accumulatedDelta = std::make_tuple(0.0f, 0.0f, 0.0f);
+
     while (true) {
         cap >> frame;
         if (frame.empty()) {
@@ -61,9 +65,37 @@ void ImageProcessor::runHandTracking() {
         }
 
         // Process the frame and get both the image and the index tip coordinates
-        auto [processed_frame, index_tip_coordinates] = this->process_video_frame(frame);
+        auto [processed_frame, currentCoordinates] = this->process_video_frame(frame);
 
-        ikSolver->solve(index_tip_coordinates);
+        // Calculate Delta
+        auto [current_x, current_y, current_z] = currentCoordinates;
+        auto [prev_x, prev_y, prev_z] = prevCoordinates;
+        std::tuple<float, float, float> delta = std::make_tuple(
+            current_x - prev_x,
+            current_y - prev_y,
+            current_z - prev_z
+        );
+
+        // Accumulate the delta
+        auto [acc_x, acc_y, acc_z] = accumulatedDelta;
+        accumulatedDelta = std::make_tuple(
+            acc_x + std::get<0>(delta),
+            acc_y + std::get<1>(delta),
+            acc_z + std::get<2>(delta)
+        );
+        framesSinceUpdate++;
+
+
+        // Pass delta to the IKSolver
+        if (framesSinceUpdate >= updateRate){
+            ikSolver->solve(delta);
+            framesSinceUpdate = 0;
+            accumulatedDelta = std::make_tuple(0.0f, 0.0f, 0.0f);
+        }
+
+        prevCoordinates = currentCoordinates;
+
+
         cv::imshow("Hand Tracking", processed_frame);
         
         if (cv::waitKey(1) == 'q') {

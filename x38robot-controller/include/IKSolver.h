@@ -5,7 +5,7 @@
 
 class IKSolver{
 public:
-    void solve(std::tuple<float, float, float> InDeltaCoordinates){
+    void solve(std::tuple<float, float, float> InOffset){
     }
 
 private:
