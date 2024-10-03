@@ -1,3 +1,4 @@
+
 #include "ImageProcessor.h"
 #include <pybind11/embed.h>
 #include <iostream>
@@ -14,15 +15,19 @@ ImageProcessor::~ImageProcessor() {
     // Python interpreter finalizes automatically
 }
 
-bool ImageProcessor::getIsActive() const{
-    return isActive;
+bool ImageProcessor::isActive() const{
+    return bIsActive;
 }
 
 void ImageProcessor::initialize(IKSolver* InIKSolver){
     ikSolver = InIKSolver;
 }
 
-void ImageProcessor::runHandTracking() {
+void ImageProcessor::stop() {
+    bIsActive = false;
+}
+
+void ImageProcessor::run() {
     if (ikSolver == nullptr) {
         std::cerr << "Error: IK Solver not initialized!" << std::endl;
         return;
@@ -52,12 +57,12 @@ void ImageProcessor::runHandTracking() {
 
     cv::namedWindow("Hand Tracking", cv::WINDOW_AUTOSIZE); // Ensure window creation
     cv::Mat frame;
-    isActive = true;
+    bIsActive = true;
     framesSinceUpdate = 0;
     prevCoordinates = std::make_tuple(0.0f, 0.0f, 0.0f);
     accumulatedDelta = std::make_tuple(0.0f, 0.0f, 0.0f);
 
-    while (true) {
+    while (bIsActive) {
         cap >> frame;
         if (frame.empty()) {
             std::cerr << "Error: Could not capture frame." << std::endl;

@@ -5,9 +5,8 @@
 
 class IKSolver{
 public:
-    void solve(std::tuple<float, float, float> InOffset){
-    }
-
+    void solve(std::tuple<float, float, float> InOffset);
+    void requestHomingSequence();
 private:
     std::tuple<float, float, float> endEffectorPosition;
 

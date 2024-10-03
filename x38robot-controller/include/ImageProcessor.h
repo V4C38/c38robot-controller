@@ -1,6 +1,7 @@
 #ifndef IMAGEPROCESSOR_H
 #define IMAGEPROCESSOR_H
 
+#include "AbstractProcessor.h"
 #include "IKSolver.h"
 #include <opencv2/opencv.hpp>
 #include <pybind11/pybind11.h>
@@ -8,21 +9,22 @@
 
 namespace py = pybind11;
 
-class ImageProcessor {
+class ImageProcessor : public AbstractProcessor {
 public:
     ImageProcessor();
     ~ImageProcessor();
 
-    void initialize(IKSolver* InIKSolver);
-    void runHandTracking();
-
-    bool getIsActive() const;
+    void initialize(IKSolver* InIKSolver) override;
+    void run() override;
+    void stop() override;
+    bool isActive() const override;
 
     // Processes the video frame and returns the processed frame
     std::pair<cv::Mat, std::tuple<float, float, float>> process_video_frame(const cv::Mat& frame);
 
 private:
-    bool isActive = false;
+    bool bIsActive = false;
+
     const int updateRate = 5;  // Send delta every n frames
     int framesSinceUpdate = 0;
     std::tuple<float, float, float> accumulatedDelta;
