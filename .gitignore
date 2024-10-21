@@ -24,3 +24,6 @@ __pycache__/
 *.swo
 *.tmp
 *~
+.DS_Store
+x38robot-controller/.DS_Store
+x38robot-controller/bin/.DS_Store

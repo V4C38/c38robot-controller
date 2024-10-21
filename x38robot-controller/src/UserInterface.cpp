@@ -4,47 +4,97 @@
 
 #include "UserInterface.h"
 
-UserInterface::UserInterface(QWidget *parent) : QMainWindow(parent){
+QComboBox* UserInterface::getSerialPortComboBox() {
+    return serialPortComboBox;
+}
+
+UserInterface::UserInterface(QWidget *parent) : QMainWindow(parent) {
 
     // Create and configure central/container widget
     setWindowTitle("C38 Robot Controller");
     QWidget *centralWidget = new QWidget(this);
     setCentralWidget(centralWidget);
 
-    setMinimumSize(300, 200);
+    setMinimumSize(400, 300);
     QVBoxLayout *mainLayout = new QVBoxLayout(centralWidget);
-    
+
+    // Serial port selector (dropdown at the top)
+    QLabel *serialPortLabel = new QLabel("Serial Port:", this);
+    serialPortComboBox = new QComboBox(this);
+    serialPortComboBox->addItem("Select Serial Port");  // Placeholder for serial port selection
+    mainLayout->addWidget(serialPortLabel);
+    mainLayout->addWidget(serialPortComboBox);
+
     // Title
     titleLabel = new QLabel("C38 Robot Controller", this);
     titleLabel->setAlignment(Qt::AlignCenter);
     titleLabel->setStyleSheet("font-size: 18px; font-weight: bold;");
     mainLayout->addWidget(titleLabel);
 
-
-    // Processor selection dropdown
+    // Processor selection dropdown (Renamed from End-effector manipulation method to Processor)
     QHBoxLayout *processorLayout = new QHBoxLayout();
-    QLabel *processorLabel = new QLabel("End-effector manipulation method:", this);
+    QLabel *processorLabel = new QLabel("Processor:", this);
     processorComboBox = new QComboBox(this);
     processorComboBox->addItem("Hand tracking image processor");
     processorComboBox->addItem("Manual set via socket processor");
     processorLayout->addWidget(processorLabel);
     processorLayout->addWidget(processorComboBox);
-    mainLayout->addLayout(processorLayout);  
-    
+    mainLayout->addLayout(processorLayout);
+
     connect(processorComboBox, QOverload<int>::of(&QComboBox::currentIndexChanged),
             this, &UserInterface::onProcessorSelected);
-    
-    // Initiate Homing Sequence Button
-    homingSequenceButton = new QPushButton("Run homing sequence", this);
-    mainLayout->addWidget(homingSequenceButton);
 
-    connect(homingSequenceButton, &QPushButton::clicked, this, &UserInterface::onHomingSequenceRequested);
-
-    // Start/Stop button
+    // Start/Stop button below processor selection
     startStopButton = new QPushButton("Start Processing", this);
     mainLayout->addWidget(startStopButton);
 
     connect(startStopButton, &QPushButton::clicked, this, &UserInterface::onToggleIsProcessing);
+
+    // Spacer above Homing and Test Commands
+    QSpacerItem *spacer = new QSpacerItem(20, 40, QSizePolicy::Minimum, QSizePolicy::Expanding);
+    mainLayout->addSpacerItem(spacer);
+
+    // Homing and Test Command Section Title
+    QLabel *commandTitle = new QLabel("Homing and Test Commands", this);
+    commandTitle->setAlignment(Qt::AlignCenter);
+    commandTitle->setStyleSheet("font-size: 16px; font-weight: bold;");
+    mainLayout->addWidget(commandTitle);
+
+    // Homing and Test button side by side with dropdowns
+    QHBoxLayout *homingTestLayout = new QHBoxLayout();
+
+    // Homing Dropdown + Button
+    QVBoxLayout *homingLayout = new QVBoxLayout();
+    QLabel *homingLabel = new QLabel("Homing Command", this);
+    homingComboBox = new QComboBox(this);
+    homingComboBox->addItem("All");
+    homingComboBox->addItem("Stepper 0");
+    homingComboBox->addItem("Stepper 1");
+    homingComboBox->addItem("Stepper 2");
+    homingLayout->addWidget(homingLabel);
+    homingLayout->addWidget(homingComboBox);
+
+    homingSequenceButton = new QPushButton("RunHomingSequence", this);
+    homingLayout->addWidget(homingSequenceButton);
+    connect(homingSequenceButton, &QPushButton::clicked, this, &UserInterface::onHomingSequenceRequested);
+    homingTestLayout->addLayout(homingLayout);
+
+    // Test Dropdown + Button
+    QVBoxLayout *testLayout = new QVBoxLayout();
+    QLabel *testLabel = new QLabel("Test Mode", this);
+    testComboBox = new QComboBox(this);
+    testComboBox->addItem("Stepper 0");
+    testComboBox->addItem("Stepper 1");
+    testComboBox->addItem("Stepper 2");
+    testLayout->addWidget(testLabel);
+    testLayout->addWidget(testComboBox);
+
+    testButton = new QPushButton("RunTest", this);
+    testLayout->addWidget(testButton);
+    connect(testButton, &QPushButton::clicked, this, &UserInterface::onTestRequested);
+    homingTestLayout->addLayout(testLayout);
+
+    mainLayout->addLayout(homingTestLayout);
 }
 
 void UserInterface::onToggleIsProcessing()
@@ -54,7 +104,20 @@ void UserInterface::onToggleIsProcessing()
 
 void UserInterface::onHomingSequenceRequested()
 {
-    emit homingSequenceRequested();
+    int selectedHomingMode = homingComboBox->currentIndex();  // Get the selected homing mode
+    int homingIndex = -1;  // Default to -1 for "All"
+    if (selectedHomingMode > 0) {
+        homingIndex = selectedHomingMode - 1; 
+        }
+
+    emit homingSequenceRequested(homingIndex);
+}
+
+
+void UserInterface::onTestRequested()
+{
+    int selectedTest = testComboBox->currentIndex();  // Get the selected test mode
+    emit testRequested(selectedTest);  // Pass the test mode to the signal
 }
 
 void UserInterface::onProcessorSelected(int index)
@@ -67,6 +130,11 @@ int UserInterface::getSelectedProcessor() const
     return selectedProcessor;
 }
 
+QString UserInterface::getSelectedSerialPort() const
+{
+    return serialPortComboBox->currentText();  // Return selected serial port
+}
+
 void UserInterface::setIsProcessing(bool InIsProcessing)
 {
     if (InIsProcessing)
@@ -74,11 +142,19 @@ void UserInterface::setIsProcessing(bool InIsProcessing)
         startStopButton->setText("Stop Processing");
         homingSequenceButton->setEnabled(false);
         processorComboBox->setEnabled(false);
+        testButton->setEnabled(false);
+        homingComboBox->setEnabled(false);
+        testComboBox->setEnabled(false);
+        serialPortComboBox->setEnabled(false);
     }
     else
     {
         startStopButton->setText("Start Processing");
         homingSequenceButton->setEnabled(true);
         processorComboBox->setEnabled(true);
+        testButton->setEnabled(true);
+        homingComboBox->setEnabled(true);
+        testComboBox->setEnabled(true);
+        serialPortComboBox->setEnabled(true);
     }
 }
