@@ -30,12 +30,14 @@ public:
 
 signals:
     void homingSequenceRequested(int selectedHomingMode);
+    void emergencyStopRequested();
     void testRequested(int selectedTestMode);
     void toggleIsProcessing();
 
 private slots:
     // Slots (Button Interactions)
     void onToggleIsProcessing();
+    void onEmergencyStopRequested();
     void onHomingSequenceRequested();
     void onTestRequested();
     void onProcessorSelected(int index);
@@ -48,25 +50,26 @@ private:
     // Title
     QLabel* titleLabel;
 
-    QPushButton* homingSequenceButton;
-    QPushButton* testButton;
-
-    // Dropdowns
+    // Processor Commands
     QVBoxLayout* processorLayout;
     QLabel* processorLabel;
     QComboBox* processorComboBox;
+    QPushButton* startStopButton;
 
-    // Homing Dropdown
+    // Homing Command
     QComboBox* homingComboBox;
+    QPushButton* homingSequenceButton;
 
-    // Test Dropdown
+    // Test Command
     QComboBox* testComboBox;
+    QPushButton* testButton;
 
     // Serial Port Dropdown
     QComboBox* serialPortComboBox;
 
-    // Start/Stop Button
-    QPushButton* startStopButton;
+    // Serial Port Dropdown
+    QPushButton* emergencyStopButton;
+
 };
 
 #undef slots

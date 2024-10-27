@@ -97,6 +97,12 @@ int main(int argc, char* argv[]) {
         }
     });
 
+    // Emergency Stop Request
+    QObject::connect(&ui, &UserInterface::emergencyStopRequested, [&]() {
+        std::string command = std::string("EmergencyStop") + "\n";
+        writeToSerialPort(command);
+    });
+
     // Homing Sequence Request
     QObject::connect(&ui, &UserInterface::homingSequenceRequested, [&](int selectedHomingMode) {
         std::string command = "RunHomingSequence " + std::to_string(selectedHomingMode) + "\n";

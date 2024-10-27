@@ -39,10 +39,12 @@ constexpr auto qt_meta_stringdata_CLASSUserInterfaceENDCLASS = QtMocHelpers::str
     "homingSequenceRequested",
     "",
     "selectedHomingMode",
+    "emergencyStopRequested",
     "testRequested",
     "selectedTestMode",
     "toggleIsProcessing",
     "onToggleIsProcessing",
+    "onEmergencyStopRequested",
     "onHomingSequenceRequested",
     "onTestRequested",
     "onProcessorSelected",
@@ -59,34 +61,38 @@ Q_CONSTINIT static const uint qt_meta_data_CLASSUserInterfaceENDCLASS[] = {
       12,       // revision
        0,       // classname
        0,    0, // classinfo
-       7,   14, // methods
+       9,   14, // methods
        0,    0, // properties
        0,    0, // enums/sets
        0,    0, // constructors
        0,       // flags
-       3,       // signalCount
+       4,       // signalCount
 
  // signals: name, argc, parameters, tag, flags, initial metatype offsets
-       1,    1,   56,    2, 0x06,    1 /* Public */,
-       4,    1,   59,    2, 0x06,    3 /* Public */,
-       6,    0,   62,    2, 0x06,    5 /* Public */,
+       1,    1,   68,    2, 0x06,    1 /* Public */,
+       4,    0,   71,    2, 0x06,    3 /* Public */,
+       5,    1,   72,    2, 0x06,    4 /* Public */,
+       7,    0,   75,    2, 0x06,    6 /* Public */,
 
  // slots: name, argc, parameters, tag, flags, initial metatype offsets
-       7,    0,   63,    2, 0x08,    6 /* Private */,
-       8,    0,   64,    2, 0x08,    7 /* Private */,
-       9,    0,   65,    2, 0x08,    8 /* Private */,
-      10,    1,   66,    2, 0x08,    9 /* Private */,
+       8,    0,   76,    2, 0x08,    7 /* Private */,
+       9,    0,   77,    2, 0x08,    8 /* Private */,
+      10,    0,   78,    2, 0x08,    9 /* Private */,
+      11,    0,   79,    2, 0x08,   10 /* Private */,
+      12,    1,   80,    2, 0x08,   11 /* Private */,
 
  // signals: parameters
     QMetaType::Void, QMetaType::Int,    3,
-    QMetaType::Void, QMetaType::Int,    5,
+    QMetaType::Void,
+    QMetaType::Void, QMetaType::Int,    6,
     QMetaType::Void,
 
  // slots: parameters
     QMetaType::Void,
     QMetaType::Void,
     QMetaType::Void,
-    QMetaType::Void, QMetaType::Int,   11,
+    QMetaType::Void,
+    QMetaType::Void, QMetaType::Int,   13,
 
        0        // eod
 };
@@ -103,12 +109,16 @@ Q_CONSTINIT const QMetaObject UserInterface::staticMetaObject = { {
         // method 'homingSequenceRequested'
         QtPrivate::TypeAndForceComplete<void, std::false_type>,
         QtPrivate::TypeAndForceComplete<int, std::false_type>,
+        // method 'emergencyStopRequested'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
         // method 'testRequested'
         QtPrivate::TypeAndForceComplete<void, std::false_type>,
         QtPrivate::TypeAndForceComplete<int, std::false_type>,
         // method 'toggleIsProcessing'
         QtPrivate::TypeAndForceComplete<void, std::false_type>,
         // method 'onToggleIsProcessing'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        // method 'onEmergencyStopRequested'
         QtPrivate::TypeAndForceComplete<void, std::false_type>,
         // method 'onHomingSequenceRequested'
         QtPrivate::TypeAndForceComplete<void, std::false_type>,
@@ -128,12 +138,14 @@ void UserInterface::qt_static_metacall(QObject *_o, QMetaObject::Call _c, int _i
         (void)_t;
         switch (_id) {
         case 0: _t->homingSequenceRequested((*reinterpret_cast< std::add_pointer_t<int>>(_a[1]))); break;
-        case 1: _t->testRequested((*reinterpret_cast< std::add_pointer_t<int>>(_a[1]))); break;
-        case 2: _t->toggleIsProcessing(); break;
-        case 3: _t->onToggleIsProcessing(); break;
-        case 4: _t->onHomingSequenceRequested(); break;
-        case 5: _t->onTestRequested(); break;
-        case 6: _t->onProcessorSelected((*reinterpret_cast< std::add_pointer_t<int>>(_a[1]))); break;
+        case 1: _t->emergencyStopRequested(); break;
+        case 2: _t->testRequested((*reinterpret_cast< std::add_pointer_t<int>>(_a[1]))); break;
+        case 3: _t->toggleIsProcessing(); break;
+        case 4: _t->onToggleIsProcessing(); break;
+        case 5: _t->onEmergencyStopRequested(); break;
+        case 6: _t->onHomingSequenceRequested(); break;
+        case 7: _t->onTestRequested(); break;
+        case 8: _t->onProcessorSelected((*reinterpret_cast< std::add_pointer_t<int>>(_a[1]))); break;
         default: ;
         }
     } else if (_c == QMetaObject::IndexOfMethod) {
@@ -146,16 +158,23 @@ void UserInterface::qt_static_metacall(QObject *_o, QMetaObject::Call _c, int _i
             }
         }
         {
+            using _t = void (UserInterface::*)();
+            if (_t _q_method = &UserInterface::emergencyStopRequested; *reinterpret_cast<_t *>(_a[1]) == _q_method) {
+                *result = 1;
+                return;
+            }
+        }
+        {
             using _t = void (UserInterface::*)(int );
             if (_t _q_method = &UserInterface::testRequested; *reinterpret_cast<_t *>(_a[1]) == _q_method) {
-                *result = 1;
+                *result = 2;
                 return;
             }
         }
         {
             using _t = void (UserInterface::*)();
             if (_t _q_method = &UserInterface::toggleIsProcessing; *reinterpret_cast<_t *>(_a[1]) == _q_method) {
-                *result = 2;
+                *result = 3;
                 return;
             }
         }
@@ -181,13 +200,13 @@ int UserInterface::qt_metacall(QMetaObject::Call _c, int _id, void **_a)
     if (_id < 0)
         return _id;
     if (_c == QMetaObject::InvokeMetaMethod) {
-        if (_id < 7)
+        if (_id < 9)
             qt_static_metacall(this, _c, _id, _a);
-        _id -= 7;
+        _id -= 9;
     } else if (_c == QMetaObject::RegisterMethodArgumentMetaType) {
-        if (_id < 7)
+        if (_id < 9)
             *reinterpret_cast<QMetaType *>(_a[0]) = QMetaType();
-        _id -= 7;
+        _id -= 9;
     }
     return _id;
 }
@@ -200,15 +219,21 @@ void UserInterface::homingSequenceRequested(int _t1)
 }
 
 // SIGNAL 1
-void UserInterface::testRequested(int _t1)
+void UserInterface::emergencyStopRequested()
 {
-    void *_a[] = { nullptr, const_cast<void*>(reinterpret_cast<const void*>(std::addressof(_t1))) };
-    QMetaObject::activate(this, &staticMetaObject, 1, _a);
+    QMetaObject::activate(this, &staticMetaObject, 1, nullptr);
 }
 
 // SIGNAL 2
+void UserInterface::testRequested(int _t1)
+{
+    void *_a[] = { nullptr, const_cast<void*>(reinterpret_cast<const void*>(std::addressof(_t1))) };
+    QMetaObject::activate(this, &staticMetaObject, 2, _a);
+}
+
+// SIGNAL 3
 void UserInterface::toggleIsProcessing()
 {
-    QMetaObject::activate(this, &staticMetaObject, 2, nullptr);
+    QMetaObject::activate(this, &staticMetaObject, 3, nullptr);
 }
 QT_WARNING_POP

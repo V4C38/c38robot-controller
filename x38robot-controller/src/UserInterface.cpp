@@ -18,18 +18,18 @@ UserInterface::UserInterface(QWidget *parent) : QMainWindow(parent) {
     setMinimumSize(400, 300);
     QVBoxLayout *mainLayout = new QVBoxLayout(centralWidget);
 
+    // Title
+    titleLabel = new QLabel("C38 Robot Controller", this);
+    titleLabel->setAlignment(Qt::AlignCenter);
+    titleLabel->setStyleSheet("font-size: 18px; font-weight: bold;");
+    mainLayout->addWidget(titleLabel);
+
     // Serial port selector (dropdown at the top)
     QLabel *serialPortLabel = new QLabel("Serial Port:", this);
     serialPortComboBox = new QComboBox(this);
     serialPortComboBox->addItem("Select Serial Port");  // Placeholder for serial port selection
     mainLayout->addWidget(serialPortLabel);
     mainLayout->addWidget(serialPortComboBox);
-
-    // Title
-    titleLabel = new QLabel("C38 Robot Controller", this);
-    titleLabel->setAlignment(Qt::AlignCenter);
-    titleLabel->setStyleSheet("font-size: 18px; font-weight: bold;");
-    mainLayout->addWidget(titleLabel);
 
     // Processor selection dropdown (Renamed from End-effector manipulation method to Processor)
     QHBoxLayout *processorLayout = new QHBoxLayout();
@@ -44,11 +44,11 @@ UserInterface::UserInterface(QWidget *parent) : QMainWindow(parent) {
     connect(processorComboBox, QOverload<int>::of(&QComboBox::currentIndexChanged),
             this, &UserInterface::onProcessorSelected);
 
-    // Start/Stop button below processor selection
+    // Start/Stop button 
     startStopButton = new QPushButton("Start Processing", this);
     mainLayout->addWidget(startStopButton);
-
     connect(startStopButton, &QPushButton::clicked, this, &UserInterface::onToggleIsProcessing);
+
 
     // Spacer above Homing and Test Commands
     QSpacerItem *spacer = new QSpacerItem(20, 40, QSizePolicy::Minimum, QSizePolicy::Expanding);
@@ -59,6 +59,11 @@ UserInterface::UserInterface(QWidget *parent) : QMainWindow(parent) {
     commandTitle->setAlignment(Qt::AlignCenter);
     commandTitle->setStyleSheet("font-size: 16px; font-weight: bold;");
     mainLayout->addWidget(commandTitle);
+
+    // Emergency Stop button
+    emergencyStopButton = new QPushButton("Emergency Stop", this);
+    mainLayout->addWidget(emergencyStopButton);
+    connect(emergencyStopButton, &QPushButton::clicked, this, &UserInterface::onEmergencyStopRequested);
 
     // Homing and Test button side by side with dropdowns
     QHBoxLayout *homingTestLayout = new QHBoxLayout();
@@ -71,6 +76,8 @@ UserInterface::UserInterface(QWidget *parent) : QMainWindow(parent) {
     homingComboBox->addItem("Stepper 0");
     homingComboBox->addItem("Stepper 1");
     homingComboBox->addItem("Stepper 2");
+    homingComboBox->addItem("Stepper 3");
+    homingComboBox->addItem("Stepper 4");
     homingLayout->addWidget(homingLabel);
     homingLayout->addWidget(homingComboBox);
 
@@ -81,11 +88,15 @@ UserInterface::UserInterface(QWidget *parent) : QMainWindow(parent) {
 
     // Test Dropdown + Button
     QVBoxLayout *testLayout = new QVBoxLayout();
-    QLabel *testLabel = new QLabel("Test Mode", this);
+    QLabel *testLabel = new QLabel("Test Command", this);
     testComboBox = new QComboBox(this);
     testComboBox->addItem("Stepper 0");
     testComboBox->addItem("Stepper 1");
     testComboBox->addItem("Stepper 2");
+    testComboBox->addItem("Stepper 3");
+    testComboBox->addItem("Stepper 4");
+    testComboBox->addItem("Jogging 1");
+    testComboBox->addItem("Jogging 2");
     testLayout->addWidget(testLabel);
     testLayout->addWidget(testComboBox);
 
@@ -113,6 +124,11 @@ void UserInterface::onHomingSequenceRequested()
     emit homingSequenceRequested(homingIndex);
 }
 
+
+void UserInterface::onEmergencyStopRequested()
+{
+    emit emergencyStopRequested();
+}
 
 void UserInterface::onTestRequested()
 {
