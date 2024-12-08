@@ -73,11 +73,12 @@ UserInterface::UserInterface(QWidget *parent) : QMainWindow(parent) {
     QLabel *homingLabel = new QLabel("Homing Command", this);
     homingComboBox = new QComboBox(this);
     homingComboBox->addItem("All");
-    homingComboBox->addItem("Stepper 0");
-    homingComboBox->addItem("Stepper 1");
-    homingComboBox->addItem("Stepper 2");
-    homingComboBox->addItem("Stepper 3");
-    homingComboBox->addItem("Stepper 4");
+    homingComboBox->addItem("Axis 0");
+    homingComboBox->addItem("Axis 1");
+    homingComboBox->addItem("Axis 2");
+    homingComboBox->addItem("Axis 3");
+    homingComboBox->addItem("Axis 4");
+    homingComboBox->addItem("Axis 5");
     homingLayout->addWidget(homingLabel);
     homingLayout->addWidget(homingComboBox);
 
@@ -90,11 +91,12 @@ UserInterface::UserInterface(QWidget *parent) : QMainWindow(parent) {
     QVBoxLayout *testLayout = new QVBoxLayout();
     QLabel *testLabel = new QLabel("Test Command", this);
     testComboBox = new QComboBox(this);
-    testComboBox->addItem("Stepper 0");
-    testComboBox->addItem("Stepper 1");
-    testComboBox->addItem("Stepper 2");
-    testComboBox->addItem("Stepper 3");
-    testComboBox->addItem("Stepper 4");
+    testComboBox->addItem("Axis 0");
+    testComboBox->addItem("Axis 1");
+    testComboBox->addItem("Axis 2");
+    testComboBox->addItem("Axis 3");
+    testComboBox->addItem("Axis 4");
+    testComboBox->addItem("Axis 5");
     testComboBox->addItem("Jogging 1");
     testComboBox->addItem("Jogging 2");
     testLayout->addWidget(testLabel);
