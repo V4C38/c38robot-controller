@@ -15,8 +15,16 @@ UserInterface::UserInterface(QWidget *parent) : QMainWindow(parent) {
     QWidget *centralWidget = new QWidget(this);
     setCentralWidget(centralWidget);
 
-    setMinimumSize(400, 300);
-    QVBoxLayout *mainLayout = new QVBoxLayout(centralWidget);
+    setMinimumSize(500, 300);
+
+    // Splitter Layout
+    QSplitter *mainSplitter = new QSplitter(Qt::Horizontal, centralWidget);
+    setCentralWidget(mainSplitter);
+
+    QWidget *uiContainer = new QWidget();
+    QVBoxLayout *mainLayout = new QVBoxLayout(uiContainer);
+    mainSplitter->addWidget(uiContainer);
+
 
     // Title
     titleLabel = new QLabel("C38 Robot Controller", this);
@@ -108,6 +116,28 @@ UserInterface::UserInterface(QWidget *parent) : QMainWindow(parent) {
     homingTestLayout->addLayout(testLayout);
 
     mainLayout->addLayout(homingTestLayout);
+
+
+
+    // 3D window
+    view = new Qt3DExtras::Qt3DWindow();
+    viewContainer = QWidget::createWindowContainer(view, this);
+    viewContainer->setMinimumSize(QSize(300, 300));
+    viewContainer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+    mainSplitter->addWidget(viewContainer); 
+
+    // Set up 3D scene
+    Qt3DCore::QEntity *rootEntity = new Qt3DCore::QEntity();
+
+    // Camera setup
+    Qt3DRender::QCamera *camera = view->camera();
+    camera->lens()->setPerspectiveProjection(45.0f, 4.0f / 3.0f, 0.1f, 100.0f);
+    camera->setPosition(QVector3D(0, 0, 10));
+    camera->setViewCenter(QVector3D(0, 0, 0));
+    // Camera controls
+    Qt3DExtras::QOrbitCameraController *camController = new Qt3DExtras::QOrbitCameraController(rootEntity);
+    camController->setCamera(camera);
+
 }
 
 void UserInterface::onToggleIsProcessing()
@@ -175,4 +205,86 @@ void UserInterface::setIsProcessing(bool InIsProcessing)
         testComboBox->setEnabled(true);
         serialPortComboBox->setEnabled(true);
     }
+}
+
+void UserInterface::update3DRender(const std::vector<JointData>& jointData)
+{
+    if (rootEntity)
+    {
+        rootEntity->deleteLater();  // Delete previous root entity
+    }
+    
+    // Create a new root entity
+    rootEntity = new Qt3DCore::QEntity();
+
+    // Frame graph setup
+    auto *surfaceSelector = new Qt3DRender::QRenderSurfaceSelector(rootEntity);
+    auto *clearBuffers = new Qt3DRender::QClearBuffers(surfaceSelector);
+    clearBuffers->setBuffers(Qt3DRender::QClearBuffers::ColorDepthBuffer);
+    clearBuffers->setClearColor(QColor(200, 200, 200));  // Light grey background
+    surfaceSelector->setParent(rootEntity);
+    view->setActiveFrameGraph(surfaceSelector);
+
+    // Add render settings
+    auto *renderSettings = new Qt3DRender::QRenderSettings(rootEntity);
+    rootEntity->addComponent(renderSettings);
+
+    // Add Directional Light
+    auto *lightEntity = new Qt3DCore::QEntity(rootEntity);
+    auto *light = new Qt3DRender::QDirectionalLight(lightEntity);
+    light->setWorldDirection(QVector3D(-1.0f, -1.0f, -1.0f));
+    light->setColor(QColor(255, 255, 255));
+    light->setIntensity(1.0f);
+    lightEntity->addComponent(light);
+
+    // Create grid plane
+    auto *gridMesh = new Qt3DExtras::QPlaneMesh();
+    gridMesh->setWidth(20.0f);
+    gridMesh->setHeight(20.0f);
+    gridMesh->setMeshResolution(QSize(20, 20));
+
+    auto *gridTransform = new Qt3DCore::QTransform();
+    gridTransform->setTranslation(QVector3D(0.0f, -0.1f, 0.0f));
+    gridTransform->setRotation(QQuaternion::fromEulerAngles(90.0f, 0.0f, 0.0f));
+
+    auto *gridMaterial = new Qt3DExtras::QPhongMaterial(rootEntity);
+    gridMaterial->setDiffuse(QColor(150, 150, 150));
+
+    auto *gridEntity = new Qt3DCore::QEntity(rootEntity);
+    gridEntity->addComponent(gridMesh);
+    gridEntity->addComponent(gridMaterial);
+    gridEntity->addComponent(gridTransform);
+
+    // Create robot arm segments
+    QVector3D currentPosition(0.0f, 0.0f, 0.0f);
+    for (const auto& joint : jointData)
+    {
+        auto *jointEntity = new Qt3DCore::QEntity(rootEntity);
+
+        auto *jointMesh = new Qt3DExtras::QCylinderMesh();
+        jointMesh->setRadius(0.2f);
+        jointMesh->setLength(joint.dHParameters.a);
+
+        auto *jointMaterial = new Qt3DExtras::QPhongMaterial();
+        jointMaterial->setDiffuse(Qt::blue);
+
+        auto *jointTransform = new Qt3DCore::QTransform();
+        currentPosition.setX(currentPosition.x() + joint.dHParameters.a * cos(joint.dHParameters.theta * M_PI / 180.0f));
+        currentPosition.setZ(currentPosition.z() + joint.dHParameters.a * sin(joint.dHParameters.theta * M_PI / 180.0f));
+        currentPosition.setY(currentPosition.y() + joint.dHParameters.d);
+
+        jointTransform->setTranslation(currentPosition);
+        jointTransform->setRotation(QQuaternion::fromEulerAngles(
+            joint.dHParameters.alpha,  // X-axis tilt
+            joint.dHParameters.theta,  // Rotation around Z-axis
+            0.0f                       // Roll
+        ));
+
+        jointEntity->addComponent(jointMesh);
+        jointEntity->addComponent(jointMaterial);
+        jointEntity->addComponent(jointTransform);
+    }
+
+    // Set root entity in the view
+    view->setRootEntity(rootEntity);
 }

@@ -7,7 +7,9 @@
 
 #include "AbstractProcessor.h"
 #include "ImageProcessor.h"
+# include "ArmState.h"
 #include "IKSolver.h"
+
 #include <thread>
 #include <atomic>
 
@@ -65,13 +67,28 @@ void writeToSerialPort(const std::string& data) {
 int main(int argc, char* argv[]) {
     QApplication app(argc, argv);
     
+    // Keeps the current hardware configuration and state
+    ArmState armState;
+
     // Initialize components
     std::atomic<bool> isProcessing{false};
     std::thread processorThread;
     std::unique_ptr<AbstractProcessor> processor = std::make_unique<ImageProcessor>();
+
     IKSolver ikSolver;
 
     UserInterface ui;
+    QObject::connect(&armState, &ArmState::onUpdated, 
+                    &ui, &UserInterface::update3DRender);
+
+    // Load config.ini
+    QString configPath = QDir(QCoreApplication::applicationDirPath()).filePath("../config/robot_arm_config.ini");
+    std::string configFilePath = configPath.toStdString();
+    if (!armState.loadConfigFile(configFilePath))
+    {
+        std::cerr << "Failed to load configuration file from: " << configFilePath << std::endl;
+        return -1;
+    }
 
     // ----------------------------------------------------------------------------------------------
     // UI Interaction events

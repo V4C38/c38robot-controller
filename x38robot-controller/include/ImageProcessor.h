@@ -1,11 +1,11 @@
-#ifndef IMAGEPROCESSOR_H
-#define IMAGEPROCESSOR_H
+#pragma once
+
+#include <opencv2/opencv.hpp>
+#include <pybind11/embed.h>
+#include <pybind11/numpy.h>
 
 #include "AbstractProcessor.h"
 #include "IKSolver.h"
-#include <opencv2/opencv.hpp>
-#include <pybind11/pybind11.h>
-#include <pybind11/numpy.h>
 
 namespace py = pybind11;
 
@@ -29,13 +29,14 @@ private:
     int framesSinceUpdate = 0;
     std::tuple<float, float, float> accumulatedDelta;
 
-    // Python conversion helpers
+    // Python function reference
     py::object process_frame_py;
+
+    // Conversion Helpers
     py::array mat_to_numpy(const cv::Mat& mat);
     cv::Mat numpy_to_mat(const py::array_t<uint8_t>& input);
 
+    // IK Solver for arm state updates
     IKSolver* ikSolver = nullptr;
     std::tuple<float, float, float> prevCoordinates;
 };
-
-#endif // IMAGEPROCESSOR_H
