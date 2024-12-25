@@ -1,10 +1,14 @@
 #pragma once
 
-#include <QObject>
 #include <vector>
 #include <string>
 #include <optional>
 #include <iostream>
+
+#include <QObject>
+#include <QDebug>
+#include <QJsonDocument>
+#include <QJsonArray> 
 
 // Struct for each joint
 struct JointData
@@ -12,6 +16,7 @@ struct JointData
     bool isCalibrated = false;
     float currentAngle = 0.0f;
     float targetAngle = 0.0f;
+
     struct DHParameters
     {
         float theta = 0.0f;
@@ -19,6 +24,9 @@ struct JointData
         float a = 0.0f;
         float alpha = 0.0f;
     } dHParameters;
+
+    float minAngle = -180.0f;
+    float maxAngle = 180.0f;
 };
 
 // State Keeper for the whole chain
@@ -28,19 +36,19 @@ class ArmState : public QObject
 
 public:
     explicit ArmState(QObject* parent = nullptr);
+    QJsonObject toJson() const;public:
+    void updateFromJson(const QJsonObject& json);
 
     bool loadConfigFile(const std::string& InConfigFilePath);
-    void update(const std::string& InSerialData);
 
     std::optional<JointData> getJointDataByIndex(int InIndex) const;
     std::vector<JointData> getAllJointData() const;
 
 signals:
     void onUpdated(const std::vector<JointData>& updatedJointData);
-    
+    void onLoadedJointData(const std::vector<JointData>& loadedJointData);
 
 private:
-    bool parseConfigFile(const std::string& InConfigFilePath);
     void parseSerialData(const std::string& InSerialData);
 
     std::vector<JointData> jointData;
