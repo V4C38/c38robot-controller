@@ -11,19 +11,22 @@ Command::Command(const QString& commandType)
 QJsonObject Command::toJson() const
 {
     QJsonObject json;
+    json["type"] = "command"; 
     json["uuid"] = uuid.toString();
     json["command"] = commandType;
     return json;
-}
+} 
 
-QJsonObject Command::generateDebugResponse() const
+QJsonObject Command::responseFormat() const
 {
-    QJsonObject json;
-    json["debugMode"] = true;
-    json["uuid"] = getUuid().toString();
-    json["command"] = getCommandType();
-    json["message"] = QString("Simulated response for command '%1'").arg(getCommandType());
-    return json;
+    QJsonObject response;
+    response["type"] = "response";
+    response["uuid"] = uuid.toString();
+    response["command"] = commandType;
+    response["status"] = "success";
+    // Keep "message" as an optional field, but do not set default values
+    response["message"] = QJsonValue(); 
+    return response;
 }
 
 QString Command::toString() const
@@ -32,20 +35,18 @@ QString Command::toString() const
     return QString(doc.toJson(QJsonDocument::Compact));
 }
 
-// GetStateCommand implementation
-GetStateCommand::GetStateCommand() : Command("getState") {}
-
-QJsonObject GetStateCommand::toJson() const
+QJsonObject Command::createStateUpdate(const QMap<int, float>& updatedAxes) const
 {
-    return Command::toJson(); // No additional fields
-}
+    QJsonObject stateUpdate;
+    QJsonObject axes;
 
-// EmergencyStopCommand implementation
-EmergencyStopCommand::EmergencyStopCommand() : Command("emergencyStop") {}
+    for (auto it = updatedAxes.begin(); it != updatedAxes.end(); ++it)
+    {
+        axes[QString::number(it.key())] = it.value();
+    }
 
-QJsonObject EmergencyStopCommand::toJson() const
-{
-    return Command::toJson(); // No additional fields
+    stateUpdate["axes"] = axes;
+    return stateUpdate;
 }
 
 // HomingSequenceCommand implementation
@@ -55,11 +56,15 @@ HomingSequenceCommand::HomingSequenceCommand(int axis)
 QJsonObject HomingSequenceCommand::toJson() const
 {
     QJsonObject json = Command::toJson();
-    if (axis != -1)
-    {
-        json["axis"] = axis;
-    }
+    json["axis"] = axis;
     return json;
+}
+
+QJsonObject HomingSequenceCommand::responseFormat() const
+{
+    QJsonObject response = Command::responseFormat();
+    response["message"] = QString("Homing sequence executed for axis %1.").arg(axis);
+    return response;
 }
 
 // SetAxisAngleCommand implementation
@@ -72,6 +77,46 @@ QJsonObject SetAxisAngleCommand::toJson() const
     json["axis"] = axis;
     json["angle"] = angle;
     return json;
+}
+
+QJsonObject SetAxisAngleCommand::responseFormat() const
+{
+    QJsonObject response = Command::responseFormat();
+    QMap<int, float> updatedAxes;
+    updatedAxes[axis] = angle;
+    response["stateUpdate"] = createStateUpdate(updatedAxes);
+    return response;
+}
+
+// GetStateCommand implementation
+GetStateCommand::GetStateCommand() : Command("getState") {}
+
+QJsonObject GetStateCommand::toJson() const
+{
+    return Command::toJson();
+}
+
+QJsonObject GetStateCommand::responseFormat() const
+{
+    // Keep stateUpdate empty; actual data is expected from the microcontroller
+    QJsonObject response = Command::responseFormat();
+    response["stateUpdate"] = QJsonObject(); 
+    return response;
+}
+
+// EmergencyStopCommand implementation
+EmergencyStopCommand::EmergencyStopCommand() : Command("emergencyStop") {}
+
+QJsonObject EmergencyStopCommand::toJson() const
+{
+    return Command::toJson();
+}
+
+QJsonObject EmergencyStopCommand::responseFormat() const
+{
+    QJsonObject response = Command::responseFormat();
+    response["message"] = "Emergency stop.";
+    return response;
 }
 
 // SetArmStateCommand implementation
@@ -94,7 +139,32 @@ QJsonObject SetArmStateCommand::toJson() const
     return json;
 }
 
-// Factory method implementation
+QJsonObject SetArmStateCommand::responseFormat() const
+{
+    QJsonObject response = Command::responseFormat();
+    return response;
+}
+
+// RunTestCommand implementation
+RunTestCommand::RunTestCommand(int testIndex)
+    : Command("runTest"), testIndex(testIndex) {}
+
+QJsonObject RunTestCommand::toJson() const
+{
+    QJsonObject json = Command::toJson();
+    json["testIndex"] = testIndex;
+    return json;
+}
+
+QJsonObject RunTestCommand::responseFormat() const
+{
+    QJsonObject response = Command::responseFormat();
+    return response;
+}
+
+// -------------------------------------------------------------------
+// Factory
+// -------------------------------------------------------------------
 std::unique_ptr<Command> createCommand(const QJsonObject& json)
 {
     if (!json.contains("command"))
@@ -114,19 +184,19 @@ std::unique_ptr<Command> createCommand(const QJsonObject& json)
     }
     else if (command == "homingSequence")
     {
-        int axis = json.contains("axis") ? json["axis"].toInt() : -1;
+        int axis = json["axis"].toInt();
         return std::make_unique<HomingSequenceCommand>(axis);
     }
     else if (command == "setAxisAngle")
     {
-        if (json.contains("axis") && json.contains("angle"))
-        {
-            return std::make_unique<SetAxisAngleCommand>(json["axis"].toInt(), json["angle"].toDouble());
-        }
-        else
-        {
-            qDebug() << "Invalid 'setAxisAngle' JSON: Missing 'axis' or 'angle'" << QJsonDocument(json).toJson();
-        }
+        int axis = json["axis"].toInt();
+        float angle = json["angle"].toDouble();
+        return std::make_unique<SetAxisAngleCommand>(axis, angle);
+    }
+    else if (command == "runTest")
+    {
+        int testIndex = json["testIndex"].toInt();
+        return std::make_unique<RunTestCommand>(testIndex);
     }
     else
     {

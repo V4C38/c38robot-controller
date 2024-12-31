@@ -5,19 +5,20 @@ SerialInterface::SerialInterface(std::shared_ptr<ArmState> armState)
 {
     if (!this->armState)
     {
-        throw std::invalid_argument("ArmState shared_ptr cannot be null");
+        throw std::invalid_argument("SerialInterface: ArmState shared_ptr cannot be null");
     }
 
-    // Initialize the serial port
     serialPort = std::make_unique<QSerialPort>();
+    QMetaObject::invokeMethod(this, [this]() {
+        this->updateAvailableSerialPorts();
+    }, Qt::QueuedConnection);
 
-    // Connect readyRead signal to a slot for reading responses
-    connect(serialPort.get(), &QSerialPort::readyRead, this, &SerialInterface::readResponse);
+    connect(serialPort.get(), &QSerialPort::readyRead, this, &SerialInterface::readMessage);
 
-    // Handle serial port errors
     connect(serialPort.get(), &QSerialPort::errorOccurred, this, [](QSerialPort::SerialPortError error) {
-        if (error != QSerialPort::NoError) {
-            qDebug() << "Serial port error:" << error;
+        if (error != QSerialPort::NoError)
+        {
+            qDebug() << "SerialInterface: Serial port error:" << error;
         }
     });
 }
@@ -33,11 +34,11 @@ bool SerialInterface::openSerialPort(const std::string& portName)
 
     if (!serialPort->open(QIODevice::ReadWrite))
     {
-        qDebug() << "Failed to open serial port:" << portName.c_str();
+        qDebug() << "SerialInterface: Failed to open serial port:" << QString::fromStdString(portName);
         return false;
     }
 
-    qDebug() << "Serial port opened successfully:" << portName.c_str();
+    qDebug() << "SerialInterface: Serial port opened successfully:" << QString::fromStdString(portName);
     return true;
 }
 
@@ -46,22 +47,26 @@ void SerialInterface::closeSerialPort()
     if (serialPort && serialPort->isOpen())
     {
         serialPort->close();
-        qDebug() << "Serial port closed.";
+        qDebug() << "SerialInterface: Serial port closed.";
     }
     serialPort.reset();
 }
 
 void SerialInterface::sendCommand(const Command& command)
 {
-    if (isDebugMode.load())
+    if (RuntimeSettings::instance().isDebugMode())
     {
-        QJsonObject debugResponse = command.generateDebugResponse();
-        emit OnResponseReceived(debugResponse);
+        QJsonObject debugResponse = command.responseFormat();
+        pendingCommands[command.getUuid()] = command.getCommandType();
+
+        qDebug().noquote() << "SerialInterface: Simulated debug response for command:" << command.getCommandType();
+        emit onMessageReceived(debugResponse);
+        processMessage(debugResponse);
         return;
     }
 
     QJsonObject jsonCommand = command.toJson();
-    pendingCommands[command.getUuid()] = command.getCommandType(); // Track pending command
+    pendingCommands[command.getUuid()] = command.getCommandType();
     sendCommand(jsonCommand);
 }
 
@@ -69,102 +74,146 @@ void SerialInterface::sendCommand(const QJsonObject& command)
 {
     if (!serialPort || !serialPort->isOpen())
     {
-        qDebug() << "Serial port is not open. Cannot send command.";
+        qDebug() << "SerialInterface: Serial port is not open. Cannot send command.";
         return;
     }
 
     QJsonDocument doc(command);
-    QByteArray data = doc.toJson(QJsonDocument::Compact) + '\n'; // Add delimiter for parsing
+    QByteArray data = doc.toJson(QJsonDocument::Compact) + '\n';
 
     qint64 bytesWritten = serialPort->write(data);
     if (bytesWritten == -1)
     {
-        qDebug() << "Failed to write to serial port.";
+        qDebug() << "SerialInterface: Failed to write to serial port.";
     }
     else
     {
-        qDebug() << "Command sent via serial:" << command;
-        emit OnCommandSent(command);
+        qDebug() << "SerialInterface: Command sent via serial:" << command;
+        emit onCommandSent(command);
     }
 }
 
-void SerialInterface::readResponse()
+void SerialInterface::readMessage()
 {
     if (!serialPort || !serialPort->isOpen())
     {
-        qDebug() << "Serial port is not open. Cannot read response.";
+        qDebug() << "SerialInterface: Serial port is not open. Cannot read response.";
         return;
     }
 
     QByteArray responseData = serialPort->readAll();
-    QList<QByteArray> messages = responseData.split('\n'); // Split concatenated responses
+    QList<QByteArray> messages = responseData.split('\n');
 
-    for (const QByteArray& message : messages)
+    for (const QByteArray& messageData : messages)
     {
-        if (message.trimmed().isEmpty())
+        if (messageData.trimmed().isEmpty())
             continue;
 
         QJsonParseError parseError;
-        QJsonDocument jsonDoc = QJsonDocument::fromJson(message, &parseError);
+        QJsonDocument jsonDoc = QJsonDocument::fromJson(messageData, &parseError);
 
         if (parseError.error != QJsonParseError::NoError)
         {
-            qDebug() << "Failed to parse response:" << parseError.errorString();
+            qDebug() << "SerialInterface: Failed to parse message:" << parseError.errorString();
             continue;
         }
 
-        QJsonObject response = jsonDoc.object();
-        qDebug() << "Response received:" << response;
-
-        emit OnResponseReceived(response);
-        processResponse(response);
+        QJsonObject message = jsonDoc.object();
+        emit onMessageReceived(message);
+        processMessage(message);
     }
 }
 
-void SerialInterface::processResponse(const QJsonObject& response)
+void SerialInterface::processMessage(const QJsonObject& message)
 {
-    // Check if the response contains a UUID
-    if (!response.contains("uuid"))
+    if (!message.contains("type"))
     {
-        qDebug() << "Response missing UUID:" << response;
+        qDebug() << "SerialInterface: Invalid message received, missing type.";
         return;
     }
 
-    // Extract the UUID from the response
-    QUuid responseUuid = QUuid::fromString(response["uuid"].toString());
+    QString type = message["type"].toString();
 
-    // Check if the UUID matches a pending command
-    auto it = pendingCommands.find(responseUuid);
-    if (it != pendingCommands.end()) // If the UUID is found
+    if (type == "response")
     {
-        QString commandType = it->second; // Retrieve the command type
-        pendingCommands.erase(it); // Remove processed command
-        qDebug() << "Matched response for command:" << commandType;
+        if (!message.contains("uuid"))
+        {
+            qDebug() << "SerialInterface: Invalid response, missing UUID.";
+            return;
+        }
+
+        QUuid responseUuid = QUuid::fromString(message["uuid"].toString());
+        auto it = pendingCommands.find(responseUuid);
+        if (it != pendingCommands.end())
+        {
+            QString commandType = it->second;
+            pendingCommands.erase(it);
+            qDebug() << "SerialInterface: Matched response for command:" << commandType;
+
+            if (message.contains("stateUpdate") && message["stateUpdate"].isObject())
+            {
+                armState->updateFromJson(message["stateUpdate"].toObject());
+                // qDebug() << "SerialInterface: Updated ArmState with response.";
+            }
+        }
+        else
+        {
+            qDebug() << "SerialInterface: Unknown or unmatched response UUID:" << responseUuid;
+        }
+
+        if (message.contains("status"))
+        {
+            QString status = message["status"].toString();
+            // qDebug() << "SerialInterface: Response status:" << status;
+        }
+
+        if (message.contains("message"))
+        {
+            QString msg = message["message"].toString();
+            if (!msg.isEmpty())
+            {
+                qDebug() << "SerialInterface: Response message:" << msg;
+            }
+        }
+    }
+    else if (type == "update")
+    {
+        if (message.contains("stateUpdate") && message["stateUpdate"].isObject())
+        {
+            armState->updateFromJson(message["stateUpdate"].toObject());
+            // qDebug() << "SerialInterface: Received unsolicited state update.";
+        }
+    }
+    else if (type == "error")
+    {
+        if (message.contains("message"))
+        {
+            QString errorMessage = message["message"].toString();
+            qDebug() << "SerialInterface: Error received:" << errorMessage;
+        }
     }
     else
     {
-        qDebug() << "Unknown or unmatched response UUID:" << responseUuid;
-    }
-
-    // Handle state update if present in the response
-    if (response.contains("stateUpdate") && response["stateUpdate"].isObject())
-    {
-        armState->updateFromJson(response["stateUpdate"].toObject());
-        qDebug() << "Updated ArmState from response.";
-    }
-    else if (!response.contains("stateUpdate"))
-    {
-        qDebug() << "No state update found in response:" << response;
-    }
-    else
-    {
-        qDebug() << "Invalid state update format in response:" << response;
+        qDebug() << "SerialInterface: Unknown message type:" << type;
     }
 }
 
-
-void SerialInterface::setDebugMode(bool enabled)
+void SerialInterface::updateAvailableSerialPorts()
 {
-    isDebugMode.store(enabled);
-    qDebug() << "Debug mode set to:" << enabled;
+    QStringList ports;
+    QDir devDir("/dev");
+    QFileInfoList portList = devDir.entryInfoList(QStringList() << "cu.*", QDir::System | QDir::Readable);
+
+    for (const QFileInfo& portInfo : portList)
+    {
+        ports.append(portInfo.absoluteFilePath());
+    }
+
+    if (ports.isEmpty())
+    {
+        ports.append("SerialInterface: No available serial ports");
+        qDebug() << "SerialInterface: No available serial ports found.";
+    }
+
+    emit onAvailableSerialPortsUpdated(ports);
 }

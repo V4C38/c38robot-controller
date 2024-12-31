@@ -3,80 +3,84 @@
 #endif
 
 #include "UserInterface.h"
+#include <QDebug>
+
 
 QComboBox* UserInterface::getSerialPortComboBox() {
     return serialPortComboBox;
 }
 
-UserInterface::UserInterface(QWidget *parent) : QMainWindow(parent) {
+UserInterface::UserInterface(QWidget *parent, 
+std::shared_ptr<ArmState> armState, std::shared_ptr<SerialInterface> serialInterface)
+    : QMainWindow(parent), armState(std::move(armState)), serialInterface(std::move(serialInterface))
+{
+    if (!this->armState)
+    {
+        throw std::invalid_argument("ArmState pointer cannot be null");
+    }
+    if (!this->serialInterface)
+    {
+        throw std::invalid_argument("SerialInterface pointer cannot be null");
+    }
+    
+    // -------------------------------------------------------------------
+    // Connect Signals
+    // -------------------------------------------------------------------
+    connect(this->armState.get(), &ArmState::onUpdated, 
+            this, &UserInterface::updateArmState);
 
-    // Create and configure central/container widget
+    connect(this->armState.get(), &ArmState::onLoadedJointData, 
+            this, &UserInterface::setJointData);
+
+    // -------------------------------------------------------------------
+    // Widgets
+    // -------------------------------------------------------------------
+    // Container widget
     setWindowTitle("C38 Robot Controller");
     QWidget *centralWidget = new QWidget(this);
     setCentralWidget(centralWidget);
+    setMinimumSize(800, 700);
 
-    setMinimumSize(500, 300);
+    // Main horizontal layout
+    QHBoxLayout *mainLayout = new QHBoxLayout(centralWidget);
 
-    // Splitter Layout
-    QSplitter *mainSplitter = new QSplitter(Qt::Horizontal, centralWidget);
-    setCentralWidget(mainSplitter);
+    // -------------------------------------------------------------------
+    // Left Layout: Tab Bar and StackedWidget
+    QVBoxLayout *leftLayout = new QVBoxLayout();
 
-    QWidget *uiContainer = new QWidget();
-    QVBoxLayout *mainLayout = new QVBoxLayout(uiContainer);
-    mainSplitter->addWidget(uiContainer);
+    // Tab Bar
+    tabBar = new QTabBar(this);
+    tabBar->addTab("Main Controls");
+    tabBar->addTab("Driver");
+    tabBar->addTab("Testing");
+    connect(tabBar, &QTabBar::currentChanged, this, &UserInterface::onTabChanged);
+    leftLayout->addWidget(tabBar);
 
+    // StackedWidget
+    stackedWidget = new QStackedWidget(this);
+    leftLayout->addWidget(stackedWidget);
 
-    // Title
-    titleLabel = new QLabel("C38 Robot Controller", this);
-    titleLabel->setAlignment(Qt::AlignCenter);
-    titleLabel->setStyleSheet("font-size: 18px; font-weight: bold;");
-    mainLayout->addWidget(titleLabel);
+    // Add left layout to the main layout
+    mainLayout->addLayout(leftLayout, 1);
 
-    // Serial port selector (dropdown at the top)
+    // -------------------------------------------------------------------
+    // Main Controls section
+    QWidget *mainControlsWidget = new QWidget();
+    QVBoxLayout *mainControlsLayout = new QVBoxLayout(mainControlsWidget);
+    mainControlsLayout->setAlignment(Qt::AlignTop);
+
     QLabel *serialPortLabel = new QLabel("Serial Port:", this);
     serialPortComboBox = new QComboBox(this);
-    serialPortComboBox->addItem("Select Serial Port");  // Placeholder for serial port selection
-    mainLayout->addWidget(serialPortLabel);
-    mainLayout->addWidget(serialPortComboBox);
-
-    // Processor selection dropdown (Renamed from End-effector manipulation method to Processor)
-    QHBoxLayout *processorLayout = new QHBoxLayout();
-    QLabel *processorLabel = new QLabel("Processor:", this);
-    processorComboBox = new QComboBox(this);
-    processorComboBox->addItem("Hand tracking image processor");
-    processorComboBox->addItem("Manual set via socket processor");
-    processorLayout->addWidget(processorLabel);
-    processorLayout->addWidget(processorComboBox);
-    mainLayout->addLayout(processorLayout);
-
-    connect(processorComboBox, QOverload<int>::of(&QComboBox::currentIndexChanged),
-            this, &UserInterface::onProcessorSelected);
-
-    // Start/Stop button 
-    startStopButton = new QPushButton("Start Processing", this);
-    mainLayout->addWidget(startStopButton);
-    connect(startStopButton, &QPushButton::clicked, this, &UserInterface::onToggleIsProcessing);
+    serialPortComboBox->addItem("Select Serial Port");
+    serialPortUpdateButton = new QPushButton("Update Serial Ports", this);
+    connect(serialPortUpdateButton, &QPushButton::clicked, this, &UserInterface::onSerialPortUpdateRequested);
+    connect(&RuntimeSettings::instance(), &RuntimeSettings::debugModeChanged, this, &UserInterface::setDebugMode);
+    mainControlsLayout->addWidget(serialPortLabel);
+    mainControlsLayout->addWidget(serialPortComboBox);
+    mainControlsLayout->addWidget(serialPortUpdateButton);
 
 
-    // Spacer above Homing and Test Commands
-    QSpacerItem *spacer = new QSpacerItem(20, 40, QSizePolicy::Minimum, QSizePolicy::Expanding);
-    mainLayout->addSpacerItem(spacer);
-
-    // Homing and Test Command Section Title
-    QLabel *commandTitle = new QLabel("Homing and Test Commands", this);
-    commandTitle->setAlignment(Qt::AlignCenter);
-    commandTitle->setStyleSheet("font-size: 16px; font-weight: bold;");
-    mainLayout->addWidget(commandTitle);
-
-    // Emergency Stop button
-    emergencyStopButton = new QPushButton("Emergency Stop", this);
-    mainLayout->addWidget(emergencyStopButton);
-    connect(emergencyStopButton, &QPushButton::clicked, this, &UserInterface::onEmergencyStopRequested);
-
-    // Homing and Test button side by side with dropdowns
-    QHBoxLayout *homingTestLayout = new QHBoxLayout();
-
-    // Homing Dropdown + Button
+    // Homing Command
     QVBoxLayout *homingLayout = new QVBoxLayout();
     QLabel *homingLabel = new QLabel("Homing Command", this);
     homingComboBox = new QComboBox(this);
@@ -87,17 +91,58 @@ UserInterface::UserInterface(QWidget *parent) : QMainWindow(parent) {
     homingComboBox->addItem("Axis 3");
     homingComboBox->addItem("Axis 4");
     homingComboBox->addItem("Axis 5");
+
     homingLayout->addWidget(homingLabel);
     homingLayout->addWidget(homingComboBox);
 
-    homingSequenceButton = new QPushButton("RunHomingSequence", this);
+    homingSequenceButton = new QPushButton("Run Homing Sequence", this);
     homingLayout->addWidget(homingSequenceButton);
     connect(homingSequenceButton, &QPushButton::clicked, this, &UserInterface::onHomingSequenceRequested);
-    homingTestLayout->addLayout(homingLayout);
 
-    // Test Dropdown + Button
-    QVBoxLayout *testLayout = new QVBoxLayout();
-    QLabel *testLabel = new QLabel("Test Command", this);
+    mainControlsLayout->addLayout(homingLayout);
+    stackedWidget->addWidget(mainControlsWidget);
+
+    // Add Emergency Stop Button
+    emergencyStopButton = new QPushButton("Emergency Stop", this);
+    mainControlsLayout->addWidget(emergencyStopButton);
+    connect(emergencyStopButton, &QPushButton::clicked, this, &UserInterface::onEmergencyStopRequested);
+
+
+    // -------------------------------------------------------------------
+    // Processor Section
+    QWidget *driverWidget = new QWidget();
+    QVBoxLayout *driverLayout = new QVBoxLayout(driverWidget);
+    driverLayout->setAlignment(Qt::AlignTop);
+
+    QLabel *driverLabel = new QLabel("Driver selection", this);
+    driverComboBox = new QComboBox(this);
+    driverComboBox->addItem("Hand tracking driver");
+    driverComboBox->addItem("Manual set via socket driver");
+    driverLayout->addWidget(driverLabel);
+    driverLayout->addWidget(driverComboBox);
+
+    driverStartStopButton = new QPushButton("Start Driver", this);
+    driverLayout->addWidget(driverStartStopButton);
+    connect(driverStartStopButton, &QPushButton::clicked, this, &UserInterface::toggleDriverState);
+
+    stackedWidget->addWidget(driverWidget);
+
+    // -------------------------------------------------------------------
+    // Test Controls section
+    QWidget *testWidget = new QWidget();
+    QVBoxLayout *testLayout = new QVBoxLayout(testWidget);
+    testLayout->setAlignment(Qt::AlignTop);
+
+    QLabel *testLabel = new QLabel("Test Selection", this);
+
+    // Debug Mode Checkbox
+    debugModeCheckBox = new QCheckBox("Enable Debug Mode", this);
+    testLayout->addWidget(debugModeCheckBox);
+    connect(debugModeCheckBox, &QCheckBox::toggled, [](bool enabled) {
+        RuntimeSettings::instance().setDebugMode(enabled); });
+    connect(&RuntimeSettings::instance(), &RuntimeSettings::debugModeChanged, 
+        debugModeCheckBox, &QCheckBox::setChecked);
+
     testComboBox = new QComboBox(this);
     testComboBox->addItem("Axis 0");
     testComboBox->addItem("Axis 1");
@@ -113,123 +158,45 @@ UserInterface::UserInterface(QWidget *parent) : QMainWindow(parent) {
     testButton = new QPushButton("RunTest", this);
     testLayout->addWidget(testButton);
     connect(testButton, &QPushButton::clicked, this, &UserInterface::onTestRequested);
-    homingTestLayout->addLayout(testLayout);
 
-    mainLayout->addLayout(homingTestLayout);
-
+    stackedWidget->addWidget(testWidget);
 
 
-    // 3D window
+    // -------------------------------------------------------------------
+    // Right Layout: 3D Window + Sliders
+    QVBoxLayout *rightLayout = new QVBoxLayout();
+
+    // 3D Window
     view = new Qt3DExtras::Qt3DWindow();
     viewContainer = QWidget::createWindowContainer(view, this);
-    viewContainer->setMinimumSize(QSize(300, 300));
+    viewContainer->setMinimumSize(QSize(300, 200));
     viewContainer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
-    mainSplitter->addWidget(viewContainer); 
+    rightLayout->addWidget(viewContainer, 5);
 
-    // Set up 3D scene
-    Qt3DCore::QEntity *rootEntity = new Qt3DCore::QEntity();
+    // Proper FrameGraph Setup
+    auto *frameGraphRoot = new Qt3DRender::QRenderSurfaceSelector();
+    frameGraphRoot->setSurface(view);
+
+    auto *clearBuffers = new Qt3DRender::QClearBuffers(frameGraphRoot);
+    clearBuffers->setClearColor(QColor(200, 200, 200));
+    clearBuffers->setBuffers(Qt3DRender::QClearBuffers::ColorDepthBuffer);
+
+    auto *renderSettings = new Qt3DRender::QRenderSettings(frameGraphRoot);
+
+    view->setActiveFrameGraph(frameGraphRoot);
+    rootEntity = new Qt3DCore::QEntity();
+    view->setRootEntity(rootEntity);
 
     // Camera setup
     Qt3DRender::QCamera *camera = view->camera();
-    camera->lens()->setPerspectiveProjection(45.0f, 4.0f / 3.0f, 0.1f, 100.0f);
-    camera->setPosition(QVector3D(0, 0, 10));
+    camera->lens()->setPerspectiveProjection(45.0f, 4.0f / 3.0f, 0.1f, 500.0f);
+    camera->setPosition(QVector3D(0, 50, 100));
     camera->setViewCenter(QVector3D(0, 0, 0));
-    // Camera controls
-    Qt3DExtras::QOrbitCameraController *camController = new Qt3DExtras::QOrbitCameraController(rootEntity);
+    auto *camController = new Qt3DExtras::QOrbitCameraController(rootEntity);
     camController->setCamera(camera);
 
-}
 
-void UserInterface::onToggleIsProcessing()
-{
-    emit toggleIsProcessing();
-}
-
-void UserInterface::onHomingSequenceRequested()
-{
-    int selectedHomingMode = homingComboBox->currentIndex();  // Get the selected homing mode
-    int homingIndex = -1;  // Default to -1 for "All"
-    if (selectedHomingMode > 0) {
-        homingIndex = selectedHomingMode - 1; 
-        }
-
-    emit homingSequenceRequested(homingIndex);
-}
-
-
-void UserInterface::onEmergencyStopRequested()
-{
-    emit emergencyStopRequested();
-}
-
-void UserInterface::onTestRequested()
-{
-    int selectedTest = testComboBox->currentIndex();  // Get the selected test mode
-    emit testRequested(selectedTest);  // Pass the test mode to the signal
-}
-
-void UserInterface::onProcessorSelected(int index)
-{
-    selectedProcessor = index;
-}
-
-int UserInterface::getSelectedProcessor() const 
-{
-    return selectedProcessor;
-}
-
-QString UserInterface::getSelectedSerialPort() const
-{
-    return serialPortComboBox->currentText();  // Return selected serial port
-}
-
-void UserInterface::setIsProcessing(bool InIsProcessing)
-{
-    if (InIsProcessing)
-    {
-        startStopButton->setText("Stop Processing");
-        homingSequenceButton->setEnabled(false);
-        processorComboBox->setEnabled(false);
-        testButton->setEnabled(false);
-        homingComboBox->setEnabled(false);
-        testComboBox->setEnabled(false);
-        serialPortComboBox->setEnabled(false);
-    }
-    else
-    {
-        startStopButton->setText("Start Processing");
-        homingSequenceButton->setEnabled(true);
-        processorComboBox->setEnabled(true);
-        testButton->setEnabled(true);
-        homingComboBox->setEnabled(true);
-        testComboBox->setEnabled(true);
-        serialPortComboBox->setEnabled(true);
-    }
-}
-
-void UserInterface::update3DRender(const std::vector<JointData>& jointData)
-{
-    if (rootEntity)
-    {
-        rootEntity->deleteLater();  // Delete previous root entity
-    }
-    
-    // Create a new root entity
-    rootEntity = new Qt3DCore::QEntity();
-
-    // Frame graph setup
-    auto *surfaceSelector = new Qt3DRender::QRenderSurfaceSelector(rootEntity);
-    auto *clearBuffers = new Qt3DRender::QClearBuffers(surfaceSelector);
-    clearBuffers->setBuffers(Qt3DRender::QClearBuffers::ColorDepthBuffer);
-    clearBuffers->setClearColor(QColor(200, 200, 200));  // Light grey background
-    surfaceSelector->setParent(rootEntity);
-    view->setActiveFrameGraph(surfaceSelector);
-
-    // Add render settings
-    auto *renderSettings = new Qt3DRender::QRenderSettings(rootEntity);
-    rootEntity->addComponent(renderSettings);
-
-    // Add Directional Light
+    // Add directional light
     auto *lightEntity = new Qt3DCore::QEntity(rootEntity);
     auto *light = new Qt3DRender::QDirectionalLight(lightEntity);
     light->setWorldDirection(QVector3D(-1.0f, -1.0f, -1.0f));
@@ -237,7 +204,7 @@ void UserInterface::update3DRender(const std::vector<JointData>& jointData)
     light->setIntensity(1.0f);
     lightEntity->addComponent(light);
 
-    // Create grid plane
+    // Create a ground plane
     auto *gridMesh = new Qt3DExtras::QPlaneMesh();
     gridMesh->setWidth(20.0f);
     gridMesh->setHeight(20.0f);
@@ -255,36 +222,263 @@ void UserInterface::update3DRender(const std::vector<JointData>& jointData)
     gridEntity->addComponent(gridMaterial);
     gridEntity->addComponent(gridTransform);
 
-    // Create robot arm segments
-    QVector3D currentPosition(0.0f, 0.0f, 0.0f);
-    for (const auto& joint : jointData)
-    {
-        auto *jointEntity = new Qt3DCore::QEntity(rootEntity);
+    // Sliders
+    QWidget* slidersContainer = new QWidget(this);
+    slidersContainer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
 
-        auto *jointMesh = new Qt3DExtras::QCylinderMesh();
+    sliderLayout = new QVBoxLayout(slidersContainer);
+    sliderLayout->setContentsMargins(10, 10, 10, 10);
+    sliderLayout->setSpacing(10);
+
+    rightLayout->addWidget(slidersContainer, 2);
+    mainLayout->addLayout(rightLayout, 2);
+
+    rightLayout->addLayout(sliderLayout, 1);
+    mainLayout->addLayout(rightLayout, 2);
+
+    // Update JointData after object initialization is complete
+    QMetaObject::invokeMethod(this, [this]() {
+        this->setJointData(this->armState->getAllJointData());
+    }, Qt::QueuedConnection);
+}
+
+
+void UserInterface::onTabChanged(int index)
+{
+    if (index >= 0 && index < stackedWidget->count())
+    {
+        stackedWidget->setCurrentIndex(index);
+    }
+}
+
+void UserInterface::setDebugMode(const bool enabled)
+{
+    qDebug() << "UserInterface: Debug mode set to:" << enabled;
+}
+
+// -------------------------------------------------------------------
+// Commands
+// -------------------------------------------------------------------
+
+void UserInterface::setDriverState(const bool isActive)
+{
+    // Update UI with driver state elements
+}
+
+void UserInterface::toggleDriverState()
+{
+    // Toggle Driver State
+}
+
+void UserInterface::onSelectAxisAngle(int axis, float angle)
+{
+    auto command = SetAxisAngleCommand(axis, angle);
+    if (serialInterface)
+    {
+        serialInterface->sendCommand(command);
+    }
+    else
+    {
+        qDebug() << "Request Command failed: Serial interface not available.";
+    }
+}
+
+void UserInterface::onHomingSequenceRequested()
+{
+    int selectedHomingMode = homingComboBox->currentIndex() - 1; // -1 for "All" option
+    auto command = HomingSequenceCommand(selectedHomingMode);
+    if (serialInterface)
+    {
+        serialInterface->sendCommand(command);
+    }
+    else
+    {
+        qDebug() << "Request Command failed: Serial interface not available.";
+    }
+}
+
+void UserInterface::onEmergencyStopRequested()
+{
+    auto command = EmergencyStopCommand();
+    if (serialInterface)
+    {
+        serialInterface->sendCommand(command);
+    }
+    else
+    {
+        qDebug() << "Request Command failed: Serial interface not available.";
+    }
+}
+
+void UserInterface::onTestRequested()
+{
+    int selectedTest = testComboBox->currentIndex();
+    auto command = RunTestCommand(selectedTest);
+    if (serialInterface)
+    {
+        serialInterface->sendCommand(command);
+    }
+    else
+    {
+        qDebug() << "Request Command failed: Serial interface not available.";
+    }
+}
+
+void UserInterface::driverSelected(int index)
+{
+    selectedDriver = index;
+}
+
+int UserInterface::getSelectedDriver() const 
+{
+    return selectedDriver;
+}
+
+QString UserInterface::getSelectedSerialPort() const
+{
+    return serialPortComboBox->currentText();
+}
+
+void UserInterface::onSerialPortUpdateRequested()
+{
+    if (serialInterface != nullptr)
+    {
+        serialInterface->updateAvailableSerialPorts();
+    }
+}
+
+void UserInterface::updateAvailableSerialPorts(const QStringList& ports)
+{
+    serialPortComboBox->clear();
+    serialPortComboBox->addItem("Select Serial Port");
+    serialPortComboBox->addItems(ports);
+}
+
+void UserInterface::updateArmState(const std::vector<JointData>& inJointData)
+{
+    for (int i = 0; i < axisSliders.size() && i < inJointData.size(); ++i)
+    {
+        // Update slider position
+        axisSliders[i]->setValue(static_cast<int>(inJointData[i].currentAngle));
+
+        // Update value label
+        axisValueLabels[i]->setText(QString::number(inJointData[i].currentAngle, 'f', 1) + "°");
+    }
+    update3DRender(inJointData);
+}
+
+void UserInterface::setJointData(const std::vector<JointData>& jointData)
+{
+    qDebug() << "setJointData called. Joint count =" << jointData.size();
+    // Clear old entities
+    for (auto* e : jointEntities)
+    {
+        if (e) e->setParent(static_cast<Qt3DCore::QNode*>(nullptr));
+        delete e;
+    }
+    jointEntities.clear();
+    jointTransforms.clear();
+
+    // Clear old sliders and labels
+    QLayoutItem* item;
+    while ((item = sliderLayout->takeAt(0)) != nullptr)
+    {
+        delete item->widget();
+        delete item;
+    }
+    axisSliders.clear();
+    axisValueLabels.clear();
+
+    QVector3D startPosition(0.0f, 0.0f, 0.0f);
+
+    for (int i = 0; i < (int)jointData.size(); ++i)
+    {
+        const auto& joint = jointData[i];
+        // Create horizontal layout for each joint
+        QHBoxLayout* jointLayout = new QHBoxLayout();
+        jointLayout->setSpacing(10);
+
+        // Name label
+        QLabel* nameLabel = new QLabel(QString("Joint %1").arg(i), this);
+        nameLabel->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+        jointLayout->addWidget(nameLabel);
+
+        // Angle display
+        QLineEdit* angleDisplay = new QLineEdit(QString::number(joint.currentAngle, 'f', 3), this);
+        angleDisplay->setReadOnly(true);
+        angleDisplay->setMaximumWidth(60); // Fixed width for angle display
+        angleDisplay->setAlignment(Qt::AlignRight);
+        jointLayout->addWidget(angleDisplay);
+        axisValueLabels.push_back(angleDisplay);
+
+        // Slider
+        QSlider* slider = new QSlider(Qt::Horizontal, this);
+        slider->setRange(static_cast<int>(joint.minAngle), static_cast<int>(joint.maxAngle));
+        slider->setValue(static_cast<int>(joint.currentAngle));
+        slider->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed); // Slider scales dynamically
+        jointLayout->addWidget(slider);
+        axisSliders.push_back(slider);
+
+        connect(slider, &QSlider::valueChanged, [this, angleDisplay, i](int val) {
+            angleDisplay->setText(QString::number(val, 'f', 3));
+            onSelectAxisAngle(i, static_cast<float>(val));
+        });
+
+        sliderLayout->addLayout(jointLayout);
+
+        // Create joint entity
+        auto* jointEntity = new Qt3DCore::QEntity(rootEntity);
+        auto* jointMesh = new Qt3DExtras::QCylinderMesh();
         jointMesh->setRadius(0.2f);
         jointMesh->setLength(joint.dHParameters.a);
 
-        auto *jointMaterial = new Qt3DExtras::QPhongMaterial();
+        auto* jointMaterial = new Qt3DExtras::QPhongMaterial(rootEntity);
         jointMaterial->setDiffuse(Qt::blue);
 
-        auto *jointTransform = new Qt3DCore::QTransform();
-        currentPosition.setX(currentPosition.x() + joint.dHParameters.a * cos(joint.dHParameters.theta * M_PI / 180.0f));
-        currentPosition.setZ(currentPosition.z() + joint.dHParameters.a * sin(joint.dHParameters.theta * M_PI / 180.0f));
-        currentPosition.setY(currentPosition.y() + joint.dHParameters.d);
-
-        jointTransform->setTranslation(currentPosition);
-        jointTransform->setRotation(QQuaternion::fromEulerAngles(
-            joint.dHParameters.alpha,  // X-axis tilt
-            joint.dHParameters.theta,  // Rotation around Z-axis
-            0.0f                       // Roll
-        ));
+        auto* jointTransform = new Qt3DCore::QTransform();
+        jointTransform->setTranslation(startPosition);
 
         jointEntity->addComponent(jointMesh);
         jointEntity->addComponent(jointMaterial);
         jointEntity->addComponent(jointTransform);
+
+        jointEntities.push_back(jointEntity);
+        jointTransforms.push_back(jointTransform);
+
+        // Update start position for next joint
+        startPosition.setX(startPosition.x() + joint.dHParameters.a);
     }
 
-    // Set root entity in the view
-    view->setRootEntity(rootEntity);
+    QMetaObject::invokeMethod(this, [this, jointData]() {
+        update3DRender(jointData);
+    }, Qt::QueuedConnection);
+}
+
+void UserInterface::update3DRender(const std::vector<JointData>& jointData)
+{
+    qDebug() << "Requested update3DRender";
+    if ((int)jointData.size() != jointEntities.size())
+        qDebug() << "update3DRender: size mismatch. jointData.size()=";
+        return;
+
+    QVector3D currentPosition(0.0f, 0.0f, 0.0f);
+
+    for (int i = 0; i < (int)jointData.size(); ++i)
+    {
+        const auto &joint = jointData[i];
+        auto *transform = jointTransforms[i];
+
+        // Calculate the new position based on DH parameters
+        currentPosition.setX(currentPosition.x() + joint.dHParameters.a * std::cos(joint.dHParameters.theta * M_PI / 180.0f));
+        currentPosition.setZ(currentPosition.z() + joint.dHParameters.a * std::sin(joint.dHParameters.theta * M_PI / 180.0f));
+        currentPosition.setY(currentPosition.y() + joint.dHParameters.d);
+
+        // Update the transform
+        transform->setTranslation(currentPosition);
+        transform->setRotation(QQuaternion::fromEulerAngles(
+            joint.dHParameters.alpha,
+            joint.dHParameters.theta,
+            0.0f
+        ));
+    }
 }

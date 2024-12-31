@@ -7,13 +7,14 @@
 #include <QSerialPort>
 #include <QSerialPortInfo>
 #include <QUuid>
+#include <QDir>
+#include <QFileInfo>
 #include <unordered_map>
 #include <memory>
-
 #include <ArmState.h>
 #include <Commands.h>
+#include <RuntimeSettings.h>
 
-// Make QUuid hashable
 namespace std
 {
     template<>
@@ -21,7 +22,7 @@ namespace std
     {
         size_t operator()(const QUuid& uuid) const noexcept
         {
-            return qHash(uuid); // Use Qt's qHash function
+            return qHash(uuid);
         }
     };
 }
@@ -39,20 +40,20 @@ public:
     void sendCommand(const QJsonObject& command);
 
 signals:
-    void OnCommandSent(const QJsonObject& command);
-    void OnResponseReceived(const QJsonObject& response);
+    void onCommandSent(const QJsonObject& command);
+    void onMessageReceived(const QJsonObject& response);
+    void onAvailableSerialPortsUpdated(const QStringList& ports);
 
 public slots:
-    void setDebugMode(bool enabled);
+    void updateAvailableSerialPorts();
 
 private:
-    std::unique_ptr<QSerialPort> serialPort;
+    std::unique_ptr<QSerialPort> serialPort = nullptr;
     std::shared_ptr<ArmState> armState = nullptr;
-    std::atomic<bool> isDebugMode{false};
 
     // Command tracking
     std::unordered_map<QUuid, QString> pendingCommands;
 
-    void readResponse();
-    void processResponse(const QJsonObject& response);
+    void readMessage();
+    void processMessage(const QJsonObject& message);
 };

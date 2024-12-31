@@ -10,6 +10,8 @@
 #include <QJsonDocument>
 #include <QJsonArray> 
 
+#include <RuntimeSettings.h>
+
 // Struct for each joint
 struct JointData
 {
@@ -35,21 +37,29 @@ class ArmState : public QObject
     Q_OBJECT
 
 public:
-    explicit ArmState(QObject* parent = nullptr);
+    explicit ArmState(QObject* parent = nullptr, const std::string& configFilePath = "");
     QJsonObject toJson() const;public:
     void updateFromJson(const QJsonObject& json);
-
-    bool loadConfigFile(const std::string& InConfigFilePath);
 
     std::optional<JointData> getJointDataByIndex(int InIndex) const;
     std::vector<JointData> getAllJointData() const;
 
 signals:
+    void onDriverStateChanged(bool isActive);
     void onUpdated(const std::vector<JointData>& updatedJointData);
     void onLoadedJointData(const std::vector<JointData>& loadedJointData);
 
+public slots:
+    void setDebugMode(bool enabled);
+    void setIsDriverActive(bool isActive);
+    void setJointData(const std::vector<JointData>& InJointData);
+
 private:
     void parseSerialData(const std::string& InSerialData);
-
     std::vector<JointData> jointData;
+
+    std::string configFilePath;
+    bool loadConfigFile(const std::string& InConfigFilePath);
+
+    std::atomic<bool> isDriverActive{false};
 };

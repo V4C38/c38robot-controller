@@ -6,10 +6,49 @@
     
     #include <QJsonObject>
 
-
-
-    ArmState::ArmState(QObject* parent) : QObject(parent)
+    ArmState::ArmState(QObject* parent, const std::string& configFilePath) 
+        : QObject(parent), configFilePath(configFilePath)
     {
+        if (configFilePath.empty())
+        {
+            qDebug() << "ArmState: No configuration file path provided during ArmState construction.";
+            return;
+        }
+        if (!loadConfigFile(configFilePath))
+        {
+            qDebug() << "ArmState: Failed to load configuration file during ArmState construction.";
+        }
+        
+        connect(&RuntimeSettings::instance(), &RuntimeSettings::debugModeChanged, this, &ArmState::setDebugMode);
+    }
+
+    void ArmState::setIsDriverActive(bool isActive)
+    {
+        if (isActive == isDriverActive.load())
+        {
+            return;
+        }
+        isDriverActive.store(isActive);
+        emit onDriverStateChanged(isActive);
+        if (isActive)
+        {
+            qDebug() << "ArmState: Driver is active.";
+        }
+        else
+        {
+            qDebug() << "ArmState: Driver is inactive.";
+        }
+    }
+
+    void ArmState::setDebugMode(bool enabled)
+    {
+        //qDebug() << "ArmState: Debug mode set to:" << enabled;
+    }
+
+    void ArmState::setJointData(const std::vector<JointData>& InJointData)
+    {
+        jointData = InJointData;
+        emit onUpdated(jointData);
     }
 
     // Convert ArmState to JSON
@@ -34,30 +73,35 @@
         return json;
     }
 
+
     void ArmState::updateFromJson(const QJsonObject& json)
     {
-        // Example: Update state based on the JSON keys and values
-        if (json.contains("joints") && json["joints"].isArray())
+        if (json.contains("axes") && json["axes"].isObject())
         {
-            QJsonArray jointsArray = json["joints"].toArray();
-            for (int i = 0; i < jointsArray.size(); ++i)
+            QJsonObject axesObj = json["axes"].toObject();
+
+            for (auto it = axesObj.begin(); it != axesObj.end(); ++it)
             {
-                if (i < jointData.size())
+                bool ok;
+                int axisIndex = it.key().toInt(&ok);
+                if (ok && axisIndex >= 0 && axisIndex < jointData.size())
                 {
-                    QJsonObject jointObj = jointsArray[i].toObject();
-                    if (jointObj.contains("angle"))
-                    {
-                        jointData[i].currentAngle = jointObj["angle"].toDouble();
-                    }
+                    jointData[axisIndex].currentAngle = it.value().toDouble();
+                    qDebug() << "ArmState: Updated axis" << axisIndex << "to angle" << jointData[axisIndex].currentAngle;
+                }
+                else
+                {
+                    qDebug() << "ArmState: Invalid axis index in stateUpdate:" << it.key();
                 }
             }
-            qDebug() << "ArmState updated from JSON.";
+            // qDebug() << "ArmState: successfully updated from JSON.";
         }
         else
         {
-            qDebug() << "Invalid stateUpdate JSON.";
+            qDebug() << "ArmState: Invalid or missing axes in stateUpdate JSON.";
         }
     }
+
 
     // Parse incoming serial data - TBD
     void ArmState::parseSerialData(const std::string& InSerialData)
@@ -70,7 +114,7 @@
     {
         if (InIndex < 0 || InIndex >= jointData.size())
         {
-            std::cerr << "Index out of range: " << InIndex << std::endl;
+            std::cerr << "ArmState: Index out of range: " << InIndex << std::endl;
             return std::nullopt;
         }
         return jointData[InIndex];
@@ -86,10 +130,10 @@
     bool ArmState::loadConfigFile(const std::string& InConfigFilePath)
     {
         std::ifstream configFile(InConfigFilePath);
-        qDebug() << "ArmState::loadConfigFile called with path:" << QString::fromStdString(InConfigFilePath);
+        qDebug() << "ArmState: loadConfigFile called with path:" << QString::fromStdString(InConfigFilePath);
         if (!configFile.is_open())
         {
-            std::cerr << "Failed to open config file: " << InConfigFilePath << std::endl;
+            std::cerr << "ArmState: Failed to open config file: " << InConfigFilePath << std::endl;
             return false;
         }
 
@@ -152,7 +196,7 @@
         for (size_t i = 0; i < jointData.size(); ++i)
         {
             const auto& joint = jointData[i];
-            qDebug() << QString("Registered Joint %1: theta=%2 d=%3 a=%4 alpha=%5 min_angle=%6 max_angle=%7")
+            qDebug() << QString("ArmState: Registered Joint %1: theta=%2 d=%3 a=%4 alpha=%5 min_angle=%6 max_angle=%7")
                             .arg(i)
                             .arg(joint.dHParameters.theta)
                             .arg(joint.dHParameters.d)
@@ -163,6 +207,6 @@
         }
 
         emit onLoadedJointData(jointData);
-        std::cout << "Successfully loaded " << jointData.size() << " joints from config.\n";
+        std::cout << "ArmState: Successfully loaded " << jointData.size() << " joints from config.\n";
         return !jointData.empty();
     }
