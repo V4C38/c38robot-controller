@@ -73,9 +73,10 @@
         return json;
     }
 
-
     void ArmState::updateFromJson(const QJsonObject& json)
     {
+        bool stateUpdated = false;
+
         if (json.contains("axes") && json["axes"].isObject())
         {
             QJsonObject axesObj = json["axes"].toObject();
@@ -87,18 +88,23 @@
                 if (ok && axisIndex >= 0 && axisIndex < jointData.size())
                 {
                     jointData[axisIndex].currentAngle = it.value().toDouble();
-                    qDebug() << "ArmState: Updated axis" << axisIndex << "to angle" << jointData[axisIndex].currentAngle;
+                    // qDebug() << "ArmState: Updated axis" << axisIndex << "to angle" << jointData[axisIndex].currentAngle;
+                    stateUpdated = true;
                 }
                 else
                 {
                     qDebug() << "ArmState: Invalid axis index in stateUpdate:" << it.key();
                 }
             }
-            // qDebug() << "ArmState: successfully updated from JSON.";
         }
         else
         {
             qDebug() << "ArmState: Invalid or missing axes in stateUpdate JSON.";
+        }
+
+        if (stateUpdated)
+        {
+            emit onUpdated(jointData);
         }
     }
 

@@ -25,6 +25,12 @@ SerialInterface::SerialInterface(std::shared_ptr<ArmState> armState)
 
 bool SerialInterface::openSerialPort(const std::string& portName)
 {
+    if (serialPort && serialPort->isOpen())
+    {
+        qDebug() << "SerialInterface: Closing currently open port before opening a new one.";
+        closeSerialPort();
+    }
+
     serialPort->setPortName(QString::fromStdString(portName));
     serialPort->setBaudRate(QSerialPort::Baud9600);
     serialPort->setDataBits(QSerialPort::Data8);
@@ -49,8 +55,10 @@ void SerialInterface::closeSerialPort()
         serialPort->close();
         qDebug() << "SerialInterface: Serial port closed.";
     }
+    // Reset serialPort only if it is fully closed
     serialPort.reset();
 }
+
 
 void SerialInterface::sendCommand(const Command& command)
 {
@@ -97,27 +105,46 @@ void SerialInterface::readMessage()
 {
     if (!serialPort || !serialPort->isOpen())
     {
-        qDebug() << "SerialInterface: Serial port is not open. Cannot read response.";
+        qDebug() << "SerialInterface: Serial port is not open. Cannot read message.";
         return;
     }
 
-    QByteArray responseData = serialPort->readAll();
-    QList<QByteArray> messages = responseData.split('\n');
+    // Append any newly received data to our buffer
+    QByteArray newData = serialPort->readAll();
+    serialBuffer.append(newData);
 
-    for (const QByteArray& messageData : messages)
+    // Attempt to split the buffer by newline characters
+    while (true)
     {
-        if (messageData.trimmed().isEmpty())
+        int newlineIndex = serialBuffer.indexOf('\n');
+        if (newlineIndex < 0)
+        {
+            // No complete line yet; wait for more data
+            break;
+        }
+
+        // Extract one line (without the newline) from the buffer
+        QByteArray line = serialBuffer.left(newlineIndex);
+        // Remove this line + newline from the buffer
+        serialBuffer.remove(0, newlineIndex + 1);
+
+        // Ignore empty or whitespace-only lines
+        if (line.trimmed().isEmpty())
             continue;
 
-        QJsonParseError parseError;
-        QJsonDocument jsonDoc = QJsonDocument::fromJson(messageData, &parseError);
+        // Debug info (raw line)
+        qDebug() << "SerialInterface: Complete line received:" << line;
 
+        // Try to parse the line as JSON
+        QJsonParseError parseError;
+        QJsonDocument jsonDoc = QJsonDocument::fromJson(line, &parseError);
         if (parseError.error != QJsonParseError::NoError)
         {
             qDebug() << "SerialInterface: Failed to parse message:" << parseError.errorString();
             continue;
         }
 
+        // If successfully parsed, process it as a JSON object
         QJsonObject message = jsonDoc.object();
         emit onMessageReceived(message);
         processMessage(message);
@@ -138,11 +165,17 @@ void SerialInterface::processMessage(const QJsonObject& message)
     {
         if (!message.contains("uuid"))
         {
-            qDebug() << "SerialInterface: Invalid response, missing UUID.";
+            qDebug() << "SerialInterface: Response missing UUID.";
             return;
         }
 
         QUuid responseUuid = QUuid::fromString(message["uuid"].toString());
+        if (responseUuid.isNull())
+        {
+            qDebug() << "SerialInterface: Invalid or empty UUID in response.";
+            return;
+        }
+
         auto it = pendingCommands.find(responseUuid);
         if (it != pendingCommands.end())
         {
@@ -153,7 +186,7 @@ void SerialInterface::processMessage(const QJsonObject& message)
             if (message.contains("stateUpdate") && message["stateUpdate"].isObject())
             {
                 armState->updateFromJson(message["stateUpdate"].toObject());
-                // qDebug() << "SerialInterface: Updated ArmState with response.";
+                qDebug() << "SerialInterface: Updated ArmState with response.";
             }
         }
         else
@@ -164,32 +197,13 @@ void SerialInterface::processMessage(const QJsonObject& message)
         if (message.contains("status"))
         {
             QString status = message["status"].toString();
-            // qDebug() << "SerialInterface: Response status:" << status;
+            qDebug() << "SerialInterface: Response status:" << status;
         }
 
         if (message.contains("message"))
         {
-            QString msg = message["message"].toString();
-            if (!msg.isEmpty())
-            {
-                qDebug() << "SerialInterface: Response message:" << msg;
-            }
-        }
-    }
-    else if (type == "update")
-    {
-        if (message.contains("stateUpdate") && message["stateUpdate"].isObject())
-        {
-            armState->updateFromJson(message["stateUpdate"].toObject());
-            // qDebug() << "SerialInterface: Received unsolicited state update.";
-        }
-    }
-    else if (type == "error")
-    {
-        if (message.contains("message"))
-        {
-            QString errorMessage = message["message"].toString();
-            qDebug() << "SerialInterface: Error received:" << errorMessage;
+            QString responseMessage = message["message"].toString();
+            qDebug() << "SerialInterface: Response message:" << responseMessage;
         }
     }
     else

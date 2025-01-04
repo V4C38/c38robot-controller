@@ -72,6 +72,7 @@ std::shared_ptr<ArmState> armState, std::shared_ptr<SerialInterface> serialInter
     QLabel *serialPortLabel = new QLabel("Serial Port:", this);
     serialPortComboBox = new QComboBox(this);
     serialPortComboBox->addItem("Select Serial Port");
+    connect(serialPortComboBox, &QComboBox::currentIndexChanged, this, &UserInterface::onSerialPortSelected);
     serialPortUpdateButton = new QPushButton("Update Serial Ports", this);
     connect(serialPortUpdateButton, &QPushButton::clicked, this, &UserInterface::onSerialPortUpdateRequested);
     connect(&RuntimeSettings::instance(), &RuntimeSettings::debugModeChanged, this, &UserInterface::setDebugMode);
@@ -254,6 +255,31 @@ void UserInterface::onTabChanged(int index)
 void UserInterface::setDebugMode(const bool enabled)
 {
     qDebug() << "UserInterface: Debug mode set to:" << enabled;
+}
+
+void UserInterface::onSerialPortSelected(int index)
+{
+    if (index == 0)
+    {
+        qDebug() << "UserInterface: No serial port selected.";
+        return;
+    }
+
+    QString selectedPort = serialPortComboBox->currentText();
+    qDebug() << "UserInterface: Selected serial port:" << selectedPort;
+
+    if (serialInterface)
+    {
+        bool success = serialInterface->openSerialPort(selectedPort.toStdString());
+        if (success)
+        {
+            qDebug() << "UserInterface: Successfully opened serial port.";
+        }
+        else
+        {
+            qDebug() << "UserInterface: Failed to open serial port.";
+        }
+    }
 }
 
 // -------------------------------------------------------------------

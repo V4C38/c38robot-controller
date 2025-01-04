@@ -66,6 +66,7 @@ public slots:
 private slots:
     void onTabChanged(int index);
     void onSerialPortUpdateRequested();
+    void onSerialPortSelected(int index);
     void onEmergencyStopRequested();
     void onHomingSequenceRequested();
     void onTestRequested();

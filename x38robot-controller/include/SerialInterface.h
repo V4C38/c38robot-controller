@@ -1,6 +1,7 @@
 #pragma once
 #include <QObject>
 #include <QApplication>
+#include <QByteArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QDebug>
@@ -51,7 +52,7 @@ private:
     std::unique_ptr<QSerialPort> serialPort = nullptr;
     std::shared_ptr<ArmState> armState = nullptr;
 
-    // Command tracking
+    QByteArray serialBuffer;
     std::unordered_map<QUuid, QString> pendingCommands;
 
     void readMessage();
