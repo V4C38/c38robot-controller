@@ -1,21 +1,24 @@
 #include "Commands.h"
-#include "ArmState.h"
-
 #include <QJsonDocument>
 #include <stdexcept>
 
-// Command base class implementation
+// -------------------------------------------------------------------
+// Command (base)
+// -------------------------------------------------------------------
 Command::Command(const QString& commandType)
-    : uuid(QUuid::createUuid()), commandType(commandType) {}
+    : uuid(QUuid::createUuid()), commandType(commandType)
+{
+}
 
 QJsonObject Command::toJson() const
 {
+    // Base JSON includes type, UUID, and command
     QJsonObject json;
-    json["type"] = "command"; 
+    json["type"] = "command";
     json["uuid"] = uuid.toString();
     json["command"] = commandType;
     return json;
-} 
+}
 
 QJsonObject Command::responseFormat() const
 {
@@ -24,15 +27,7 @@ QJsonObject Command::responseFormat() const
     response["uuid"] = uuid.toString();
     response["command"] = commandType;
     response["status"] = "success";
-    // Keep "message" as an optional field, but do not set default values
-    response["message"] = QJsonValue(); 
     return response;
-}
-
-QString Command::toString() const
-{
-    QJsonDocument doc(toJson());
-    return QString(doc.toJson(QJsonDocument::Compact));
 }
 
 QJsonObject Command::createStateUpdate(const QMap<int, float>& updatedAxes) const
@@ -44,122 +39,167 @@ QJsonObject Command::createStateUpdate(const QMap<int, float>& updatedAxes) cons
     {
         axes[QString::number(it.key())] = it.value();
     }
-
     stateUpdate["axes"] = axes;
     return stateUpdate;
 }
 
-// HomingSequenceCommand implementation
+// -------------------------------------------------------------------
+// HomingSequenceCommand
+// -------------------------------------------------------------------
 HomingSequenceCommand::HomingSequenceCommand(int axis)
-    : Command("homingSequence"), axis(axis) {}
+    : Command("homingSequence"), axis(axis)
+{
+}
 
 QJsonObject HomingSequenceCommand::toJson() const
 {
-    QJsonObject json = Command::toJson();
-    json["axis"] = axis;
-    return json;
+    QJsonObject baseJson = Command::toJson();
+
+    // Wrap parameters in a subobject
+    QJsonObject paramObj;
+    paramObj["axis"] = axis;
+
+    baseJson["parameters"] = paramObj;
+    return baseJson;
 }
 
 QJsonObject HomingSequenceCommand::responseFormat() const
 {
-    QJsonObject response = Command::responseFormat();
-    response["message"] = QString("Homing sequence executed for axis %1.").arg(axis);
-    return response;
+    QJsonObject resp = Command::responseFormat();
+    resp["message"] = QString("Homing sequence executed for axis %1.").arg(axis);
+    return resp;
 }
 
-// SetAxisAngleCommand implementation
+// -------------------------------------------------------------------
+// SetAxisAngleCommand
+// -------------------------------------------------------------------
 SetAxisAngleCommand::SetAxisAngleCommand(int axis, float angle)
-    : Command("setAxisAngle"), axis(axis), angle(angle) {}
+    : Command("setAxisAngle"), axis(axis), angle(angle)
+{
+}
 
 QJsonObject SetAxisAngleCommand::toJson() const
 {
-    QJsonObject json = Command::toJson();
-    json["axis"] = axis;
-    json["angle"] = angle;
-    return json;
+    QJsonObject baseJson = Command::toJson();
+
+    // Wrap parameters
+    QJsonObject paramObj;
+    paramObj["axis"] = axis;
+    paramObj["angle"] = angle;
+
+    baseJson["parameters"] = paramObj;
+    return baseJson;
 }
 
 QJsonObject SetAxisAngleCommand::responseFormat() const
 {
-    QJsonObject response = Command::responseFormat();
+    QJsonObject resp = Command::responseFormat();
+
+    // Include a stateUpdate with the new angle
     QMap<int, float> updatedAxes;
     updatedAxes[axis] = angle;
-    response["stateUpdate"] = createStateUpdate(updatedAxes);
-    return response;
+    resp["stateUpdate"] = createStateUpdate(updatedAxes);
+    return resp;
 }
 
-// GetStateCommand implementation
-GetStateCommand::GetStateCommand() : Command("getState") {}
+// -------------------------------------------------------------------
+// GetStateCommand
+// -------------------------------------------------------------------
+GetStateCommand::GetStateCommand()
+    : Command("getState")
+{
+}
 
 QJsonObject GetStateCommand::toJson() const
 {
+    // No extra parameters
     return Command::toJson();
 }
 
 QJsonObject GetStateCommand::responseFormat() const
 {
-    // Keep stateUpdate empty; actual data is expected from the microcontroller
-    QJsonObject response = Command::responseFormat();
-    response["stateUpdate"] = QJsonObject(); 
-    return response;
+    QJsonObject resp = Command::responseFormat();
+    // We'll rely on the microcontroller to fill stateUpdate
+    return resp;
 }
 
-// EmergencyStopCommand implementation
-EmergencyStopCommand::EmergencyStopCommand() : Command("emergencyStop") {}
+// -------------------------------------------------------------------
+// EmergencyStopCommand
+// -------------------------------------------------------------------
+EmergencyStopCommand::EmergencyStopCommand()
+    : Command("emergencyStop")
+{
+}
 
 QJsonObject EmergencyStopCommand::toJson() const
 {
-    return Command::toJson();
+    return Command::toJson(); // no parameters
 }
 
 QJsonObject EmergencyStopCommand::responseFormat() const
 {
-    QJsonObject response = Command::responseFormat();
-    response["message"] = "Emergency stop.";
-    return response;
+    QJsonObject resp = Command::responseFormat();
+    resp["message"] = "Emergency stop.";
+    return resp;
 }
 
-// SetArmStateCommand implementation
+// -------------------------------------------------------------------
+// SetArmStateCommand
+// -------------------------------------------------------------------
+#include "ArmState.h"
+
 SetArmStateCommand::SetArmStateCommand(const ArmState* armState)
     : Command("setArmState"), armState(armState)
 {
     if (!armState)
     {
-        throw std::invalid_argument("ArmState pointer cannot be null");
+        throw std::invalid_argument("SetArmStateCommand: ArmState pointer cannot be null");
     }
 }
 
 QJsonObject SetArmStateCommand::toJson() const
 {
-    QJsonObject json = Command::toJson();
+    QJsonObject baseJson = Command::toJson();
+
     if (armState)
     {
-        json["armState"] = armState->toJson();
+        QJsonObject paramObj;
+        // Suppose armState has a toJson() that returns a QJsonObject
+        paramObj["armState"] = armState->toJson();
+        baseJson["parameters"] = paramObj;
     }
-    return json;
+    return baseJson;
 }
 
 QJsonObject SetArmStateCommand::responseFormat() const
 {
-    QJsonObject response = Command::responseFormat();
-    return response;
+    // No special stateUpdate for this unless you want to include one
+    return Command::responseFormat();
 }
 
-// RunTestCommand implementation
+// -------------------------------------------------------------------
+// RunTestCommand
+// -------------------------------------------------------------------
 RunTestCommand::RunTestCommand(int testIndex)
-    : Command("runTest"), testIndex(testIndex) {}
+    : Command("runTest"), testIndex(testIndex)
+{
+}
 
 QJsonObject RunTestCommand::toJson() const
 {
-    QJsonObject json = Command::toJson();
-    json["testIndex"] = testIndex;
-    return json;
+    QJsonObject baseJson = Command::toJson();
+
+    // Wrap parameters
+    QJsonObject paramObj;
+    paramObj["testIndex"] = testIndex;
+
+    baseJson["parameters"] = paramObj;
+    return baseJson;
 }
 
 QJsonObject RunTestCommand::responseFormat() const
 {
-    QJsonObject response = Command::responseFormat();
-    return response;
+    return Command::responseFormat();
 }
 
 // -------------------------------------------------------------------
@@ -169,38 +209,39 @@ std::unique_ptr<Command> createCommand(const QJsonObject& json)
 {
     if (!json.contains("command"))
     {
-        qDebug() << "Invalid command JSON: Missing 'command' key" << QJsonDocument(json).toJson(QJsonDocument::Compact);
+        qDebug() << "Invalid command JSON: Missing 'command' key"
+                 << QJsonDocument(json).toJson(QJsonDocument::Compact);
         return nullptr;
     }
 
-    QString command = json["command"].toString();
-    if (command == "getState")
+    QString cmd = json["command"].toString();
+    if (cmd == "getState")
     {
         return std::make_unique<GetStateCommand>();
     }
-    else if (command == "emergencyStop")
+    else if (cmd == "emergencyStop")
     {
         return std::make_unique<EmergencyStopCommand>();
     }
-    else if (command == "homingSequence")
+    else if (cmd == "homingSequence")
     {
-        int axis = json["axis"].toInt();
+        int axis = json["parameters"].toObject()["axis"].toInt(-1);
         return std::make_unique<HomingSequenceCommand>(axis);
     }
-    else if (command == "setAxisAngle")
+    else if (cmd == "setAxisAngle")
     {
-        int axis = json["axis"].toInt();
-        float angle = json["angle"].toDouble();
+        int axis = json["parameters"].toObject()["axis"].toInt(-1);
+        float angle = static_cast<float>(json["parameters"].toObject()["angle"].toDouble(0.0));
         return std::make_unique<SetAxisAngleCommand>(axis, angle);
     }
-    else if (command == "runTest")
+    else if (cmd == "runTest")
     {
-        int testIndex = json["testIndex"].toInt();
-        return std::make_unique<RunTestCommand>(testIndex);
+        int testIdx = json["parameters"].toObject()["testIndex"].toInt(-1);
+        return std::make_unique<RunTestCommand>(testIdx);
     }
     else
     {
-        qDebug() << "Unsupported command:" << command << QJsonDocument(json).toJson();
+        qDebug() << "Unsupported command:" << cmd << QJsonDocument(json).toJson();
     }
 
     return nullptr;

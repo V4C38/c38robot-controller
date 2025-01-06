@@ -1,59 +1,43 @@
 #pragma once
 
-#include <memory>
-
-#include <QMap>
 #include <QJsonObject>
-#include <QString>
 #include <QUuid>
+#include <memory>
+#include <map>
 #include <QDebug>
 
-// Forward declaration to avoid circular dependencies
 class ArmState;
 
-// Base class for commands
+// -------------------------------------------------------------------
+// Base Command
+// -------------------------------------------------------------------
 class Command
 {
 public:
-    explicit Command(const QString& commandType);
+    Command(const QString& commandType);
     virtual ~Command() = default;
 
     virtual QJsonObject toJson() const;
-    QString toString() const;
-
-    QUuid getUuid() const { return uuid; }
-    QString getCommandType() const { return commandType; }
-    
     virtual QJsonObject responseFormat() const;
+    
+    QString getCommandType() const { return commandType; }
+    QUuid getUuid() const { return uuid; }
+
+protected:
+    QJsonObject createStateUpdate(const QMap<int, float>& updatedAxes) const;
 
 protected:
     QUuid uuid;
     QString commandType;
-
-    QJsonObject createStateUpdate(const QMap<int, float>& updatedAxes) const;
 };
 
-// Derived classes for specific commands
-class GetStateCommand : public Command
-{
-public:
-    GetStateCommand();
-    QJsonObject toJson() const override;
-    QJsonObject responseFormat() const override;
-};
-
-class EmergencyStopCommand : public Command
-{
-public:
-    EmergencyStopCommand();
-    QJsonObject toJson() const override;
-    QJsonObject responseFormat() const override;
-};
-
+// -------------------------------------------------------------------
+// HomingSequenceCommand
+// -------------------------------------------------------------------
 class HomingSequenceCommand : public Command
 {
 public:
-    explicit HomingSequenceCommand(int axis = -1);
+    HomingSequenceCommand(int axis);
     QJsonObject toJson() const override;
     QJsonObject responseFormat() const override;
 
@@ -61,6 +45,9 @@ private:
     int axis;
 };
 
+// -------------------------------------------------------------------
+// SetAxisAngleCommand
+// -------------------------------------------------------------------
 class SetAxisAngleCommand : public Command
 {
 public:
@@ -73,6 +60,31 @@ private:
     float angle;
 };
 
+// -------------------------------------------------------------------
+// GetStateCommand
+// -------------------------------------------------------------------
+class GetStateCommand : public Command
+{
+public:
+    GetStateCommand();
+    QJsonObject toJson() const override;
+    QJsonObject responseFormat() const override;
+};
+
+// -------------------------------------------------------------------
+// EmergencyStopCommand
+// -------------------------------------------------------------------
+class EmergencyStopCommand : public Command
+{
+public:
+    EmergencyStopCommand();
+    QJsonObject toJson() const override;
+    QJsonObject responseFormat() const override;
+};
+
+// -------------------------------------------------------------------
+// SetArmStateCommand
+// -------------------------------------------------------------------
 class SetArmStateCommand : public Command
 {
 public:
@@ -84,10 +96,13 @@ private:
     const ArmState* armState;
 };
 
+// -------------------------------------------------------------------
+// RunTestCommand
+// -------------------------------------------------------------------
 class RunTestCommand : public Command
 {
 public:
-    explicit RunTestCommand(int testIndex);
+    RunTestCommand(int testIndex);
     QJsonObject toJson() const override;
     QJsonObject responseFormat() const override;
 
@@ -95,5 +110,7 @@ private:
     int testIndex;
 };
 
-// Factory method to create commands from JSON
+// -------------------------------------------------------------------
+// Factory
+// -------------------------------------------------------------------
 std::unique_ptr<Command> createCommand(const QJsonObject& json);
